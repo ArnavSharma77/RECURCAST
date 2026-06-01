@@ -15,10 +15,6 @@ import { RevenueBudgetChart } from "@/components/charts/revenue-budget-chart";
 import { VarianceChart } from "@/components/charts/variance-chart";
 import { NetProfitChart } from "@/components/charts/net-profit-chart";
 import { getDemoServiceData, getRollingServiceForecast } from "@/lib/service-demo-data";
-import { SERVICES } from "@/lib/services";
-import {
-  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
-} from "recharts";
 import { ArrowRight, TrendingUp, Percent, DollarSign, Activity, Loader2 } from "lucide-react";
 
 function getClientId(): string | null {
@@ -172,8 +168,10 @@ export default function DashboardPage() {
 
   const ytdNetProfitPct = ytdActualIncome > 0 ? ytdActualNI / ytdActualIncome : 0;
 
-  const ytdOneOffActual = actuals.reduce((s, p) => s + p.installRev + p.productRev, 0);
-  const ytdOneOffBudget = budget.slice(0, pc).reduce((s, p) => s + p.installRev + p.productRev, 0);
+  const oneOffData = getDemoServiceData(pc).oneoffs;
+  const oneOffRolling = getRollingServiceForecast(oneOffData.actuals, oneOffData.forecast, pc);
+  const ytdOneOffActual = oneOffRolling.slice(0, pc).reduce((s, p) => s + p.revenue, 0);
+  const ytdOneOffBudget = oneOffData.budget.slice(0, pc).reduce((s, p) => s + p.revenue, 0);
   const ytdOneOffVariance = ytdOneOffActual - ytdOneOffBudget;
 
   return (
@@ -241,10 +239,8 @@ export default function DashboardPage() {
 
         <NetProfitChart data={netProfitData} ytdPct={ytdNetProfitPct} periodsCompleted={pc} />
 
-        <OverallExpenses periodsCompleted={pc} />
-
         <div className="spotlight-card p-5 sm:p-6">
-          <h3 className="text-sm font-medium text-slate-900 mb-1">One-Off Revenue (Installs + Product)</h3>
+          <h3 className="text-sm font-medium text-slate-900 mb-1">One-Off Revenue</h3>
           <p className="text-[0.6875rem] text-slate-400 mb-5">Non-recurring revenue excluded from Avg Weekly Rev/Cust</p>
           <div className="grid grid-cols-3 gap-3">
             <div className="border-t border-slate-200 pt-3">
@@ -315,8 +311,8 @@ export default function DashboardPage() {
 
         <div className="border-t border-slate-200 pt-4 px-1">
           <p className="text-[0.6875rem] text-slate-400 leading-relaxed">
-            <span className="text-slate-600 font-medium">AGP (Adjusted Gross Profit)</span> = Gross Profit - Franchise Fees (13%) - Route/Tech Labor (24%) - Auto Expense.
-            AGP Margin is AGP as a percentage of Total Revenue. <span className="text-slate-600 font-medium">Avg Weekly Rev/Cust</span> excludes one-off revenue (installs, product sales).
+            <span className="text-slate-600 font-medium">AGP (Adjusted Gross Profit)</span> = Gross Profit - Franchise Fees (13%) - Route/Tech Labor (24%) - Vehicle Expense.
+            AGP Margin is AGP as a percentage of Total Revenue. <span className="text-slate-600 font-medium">Avg Weekly Rev/Cust</span> excludes one-off service revenue.
           </p>
         </div>
       </main>
@@ -417,99 +413,6 @@ function PeriodRangeReview({
   );
 }
 
-function OverallExpenses({ periodsCompleted }: { periodsCompleted: number }) {
-  const serviceData = getDemoServiceData(periodsCompleted);
-
-  const chartData = Array.from({ length: 13 }, (_, i) => {
-    let sales = 0, opex = 0, overhead = 0;
-    let budgetSales = 0, budgetOpex = 0, budgetOverhead = 0;
-
-    for (const svc of SERVICES) {
-      const data = serviceData[svc.key];
-      const rolling = getRollingServiceForecast(data.actuals, data.forecast, periodsCompleted);
-      sales += rolling[i]?.salesCost ?? 0;
-      opex += rolling[i]?.operatingCost ?? 0;
-      overhead += rolling[i]?.overheadCost ?? 0;
-      budgetSales += data.budget[i]?.salesCost ?? 0;
-      budgetOpex += data.budget[i]?.operatingCost ?? 0;
-      budgetOverhead += data.budget[i]?.overheadCost ?? 0;
-    }
-    return {
-      period: `P${i + 1}`,
-      sales: i < periodsCompleted ? sales : null,
-      budgetSales,
-      opex: i < periodsCompleted ? opex : null,
-      budgetOpex,
-      overhead: i < periodsCompleted ? overhead : null,
-      budgetOverhead,
-    };
-  });
-
-  const tooltipStyle = {
-    contentStyle: { background: "#fff", border: "1px solid #E2E8F0", borderRadius: "10px", fontSize: 12, boxShadow: "0 4px 16px rgba(15,23,42,0.08)" },
-    labelStyle: { color: "#0F172A", fontWeight: 600, fontSize: 12 },
-    itemStyle: { color: "#1E293B" },
-    cursor: { fill: "rgba(30,42,94,0.025)" },
-    wrapperStyle: { outline: "none" },
-  };
-
-  return (
-    <div className="space-y-5">
-      <div className="flex items-center gap-2 mb-1">
-        <h2 className="text-base font-bold text-[#1E2A5E]">Overall Expenses (Company-Wide)</h2>
-        <span className="text-[10px] text-slate-400 font-medium mt-0.5">Actual vs Budget by period across all services</span>
-      </div>
-
-      <div className="spotlight-card p-5 sm:p-6">
-        <h3 className="text-sm font-semibold text-slate-800 mb-1">Sales Expense: Actual vs Budget</h3>
-        <p className="text-[11px] text-slate-400 mb-5">Company-wide sales expense per period</p>
-        <ResponsiveContainer width="100%" height={220}>
-          <BarChart data={chartData}>
-            <CartesianGrid strokeDasharray="3 3" stroke="#F1F5F9" />
-            <XAxis dataKey="period" tick={{ fill: "#64748B", fontSize: 11 }} axisLine={{ stroke: "#E2E8F0" }} />
-            <YAxis tick={{ fill: "#64748B", fontSize: 11 }} tickFormatter={(v: number) => fmtCurrency(v, true)} axisLine={{ stroke: "#E2E8F0" }} />
-            <Tooltip {...tooltipStyle} formatter={(v) => fmtCurrency(Number(v))} />
-            <Legend wrapperStyle={{ fontSize: 11, color: "#64748B", paddingTop: 10 }} />
-            <Bar dataKey="budgetSales" fill="rgba(30,58,138,0.15)" name="Budget" radius={[4, 4, 0, 0]} />
-            <Bar dataKey="sales" fill="#4338CA" name="Actual" radius={[4, 4, 0, 0]} />
-          </BarChart>
-        </ResponsiveContainer>
-      </div>
-
-      <div className="spotlight-card p-5 sm:p-6">
-        <h3 className="text-sm font-semibold text-slate-800 mb-1">Operating Expense: Actual vs Budget</h3>
-        <p className="text-[11px] text-slate-400 mb-5">Company-wide operating costs per period</p>
-        <ResponsiveContainer width="100%" height={220}>
-          <BarChart data={chartData}>
-            <CartesianGrid strokeDasharray="3 3" stroke="#F1F5F9" />
-            <XAxis dataKey="period" tick={{ fill: "#64748B", fontSize: 11 }} axisLine={{ stroke: "#E2E8F0" }} />
-            <YAxis tick={{ fill: "#64748B", fontSize: 11 }} tickFormatter={(v: number) => fmtCurrency(v, true)} axisLine={{ stroke: "#E2E8F0" }} />
-            <Tooltip {...tooltipStyle} formatter={(v) => fmtCurrency(Number(v))} />
-            <Legend wrapperStyle={{ fontSize: 11, color: "#64748B", paddingTop: 10 }} />
-            <Bar dataKey="budgetOpex" fill="rgba(30,58,138,0.15)" name="Budget" radius={[4, 4, 0, 0]} />
-            <Bar dataKey="opex" fill="#065F46" name="Actual" radius={[4, 4, 0, 0]} />
-          </BarChart>
-        </ResponsiveContainer>
-      </div>
-
-      <div className="spotlight-card p-5 sm:p-6">
-        <h3 className="text-sm font-semibold text-slate-800 mb-1">Overhead: Actual vs Budget</h3>
-        <p className="text-[11px] text-slate-400 mb-5">Company-wide fixed overhead per period</p>
-        <ResponsiveContainer width="100%" height={220}>
-          <BarChart data={chartData}>
-            <CartesianGrid strokeDasharray="3 3" stroke="#F1F5F9" />
-            <XAxis dataKey="period" tick={{ fill: "#64748B", fontSize: 11 }} axisLine={{ stroke: "#E2E8F0" }} />
-            <YAxis tick={{ fill: "#64748B", fontSize: 11 }} tickFormatter={(v: number) => fmtCurrency(v, true)} axisLine={{ stroke: "#E2E8F0" }} />
-            <Tooltip {...tooltipStyle} formatter={(v) => fmtCurrency(Number(v))} />
-            <Legend wrapperStyle={{ fontSize: 11, color: "#64748B", paddingTop: 10 }} />
-            <Bar dataKey="budgetOverhead" fill="rgba(30,58,138,0.15)" name="Budget" radius={[4, 4, 0, 0]} />
-            <Bar dataKey="overhead" fill="#B8860B" name="Actual" radius={[4, 4, 0, 0]} />
-          </BarChart>
-        </ResponsiveContainer>
-      </div>
-    </div>
-  );
-}
 
 function MetricCard({ icon, label, value, sublabel }: { icon: React.ReactNode; label: string; value: string; sublabel?: string }) {
   return (

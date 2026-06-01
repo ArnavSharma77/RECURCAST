@@ -148,15 +148,15 @@ export default function Home() {
               <ol className="space-y-3 text-sm text-slate-500 flex-1">
                 <li className="flex gap-3 items-start">
                   <StepNumber n={1} />
-                  <span><strong className="text-slate-800 font-medium">Dashboard</strong> - review financials at a glance.</span>
+                  <Link href="/dashboard" className="hover:text-[#1E2A5E] transition-colors"><strong className="text-slate-800 font-medium hover:text-[#1E2A5E]">Dashboard</strong> - review financials at a glance.</Link>
                 </li>
                 <li className="flex gap-3 items-start">
                   <StepNumber n={2} />
-                  <span><strong className="text-slate-800 font-medium">What-If</strong> - model staff, sales, or cancellation rate.</span>
+                  <Link href="/whatif" className="hover:text-[#1E2A5E] transition-colors"><strong className="text-slate-800 font-medium hover:text-[#1E2A5E]">What-If</strong> - model staff, sales, or cancellation rate.</Link>
                 </li>
                 <li className="flex gap-3 items-start">
                   <StepNumber n={3} />
-                  <span><strong className="text-slate-800 font-medium">Actuals</strong> - enter each period to keep the forecast accurate.</span>
+                  <Link href="/actuals" className="hover:text-[#1E2A5E] transition-colors"><strong className="text-slate-800 font-medium hover:text-[#1E2A5E]">Actuals</strong> - enter each period to keep the forecast accurate.</Link>
                 </li>
               </ol>
             </div>

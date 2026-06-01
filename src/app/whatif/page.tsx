@@ -54,19 +54,19 @@ export default function WhatIfPage() {
   const [liveForecast, setLiveForecast] = useState<PeriodData[] | null>(null);
   const [dataReady, setDataReady] = useState(false);
   const [weeklySalesRate, setWeeklySalesRate] = useState(200);
-  const [staffCost, setStaffCost] = useState(3500);
-  const [staffStart, setStaffStart] = useState(4);
+  const [staffCost, setStaffCost] = useState(0);
+  const [staffStart, setStaffStart] = useState(1);
   const [useSameRamp, setUseSameRamp] = useState(true);
-  const [sameRampValue, setSameRampValue] = useState(200);
+  const [sameRampValue, setSameRampValue] = useState(0);
   const [weeklyRamp, setWeeklyRamp] = useState<number[]>(
-    Array.from({ length: NUM_PERIODS }, (_, i) => (i + 1) >= 4 ? 200 : 0)
+    Array.from({ length: NUM_PERIODS }, () => 0)
   );
   const [cxOverride, setCxOverride] = useState<number | null>(null);
-  const [commissionPct, setCommissionPct] = useState(10);
+  const [commissionPct, setCommissionPct] = useState(0);
   const [servicePricePct, setServicePricePct] = useState(0);
-  const [servicePriceStart, setServicePriceStart] = useState(6);
+  const [servicePriceStart, setServicePriceStart] = useState(1);
   const [productPricePct, setProductPricePct] = useState(0);
-  const [productPriceStart, setProductPriceStart] = useState(6);
+  const [productPriceStart, setProductPriceStart] = useState(1);
 
   const applyPreset = useCallback((p: Preset) => {
     setStaffCost(p.staffCost);
@@ -95,8 +95,6 @@ export default function WhatIfPage() {
         const c = client as ClientRow;
         const rate = Number(c.weekly_sales_rate) || 200;
         setWeeklySalesRate(rate);
-        setSameRampValue(rate);
-        setWeeklyRamp(Array.from({ length: NUM_PERIODS }, (_, i) => (i + 1) >= 4 ? rate : 0));
         const p: ClientParameters = {
           locationName: c.name, fiscalYear: c.fiscal_year, periodsCompleted: c.periods_completed,
           cxRate: Number(c.cx_rate), avgServicePrice: 0, tripChargePerCust: 0,

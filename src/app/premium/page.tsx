@@ -7,6 +7,9 @@ import { Nav } from "@/components/nav";
 import { fmtCurrency, fmtPct } from "@/lib/model";
 import { SERVICES, type ServiceName } from "@/lib/services";
 import { getDemoServiceData, getRollingServiceForecast, type ServicePeriodData } from "@/lib/service-demo-data";
+import {
+  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
+} from "recharts";
 import { supabase } from "@/lib/supabase/client";
 import type { ClientRow } from "@/lib/supabase/types";
 import { Crown, ArrowRight, Loader2 } from "lucide-react";
@@ -231,6 +234,9 @@ export default function PremiumPage() {
           </table>
         </div>
 
+        {/* Overall Expenses */}
+        <OverallExpenses periodsCompleted={periodsCompleted} serviceData={serviceData} />
+
         {/* Link to individual services */}
         <div className="spotlight-card p-5 sm:p-6">
           <h3 className="text-sm font-semibold text-slate-800 mb-4">Service Deep Dives</h3>
@@ -255,6 +261,98 @@ export default function PremiumPage() {
           </div>
         </div>
       </main>
+    </div>
+  );
+}
+
+function OverallExpenses({ periodsCompleted, serviceData }: { periodsCompleted: number; serviceData: ReturnType<typeof getDemoServiceData> }) {
+  const chartData = Array.from({ length: 13 }, (_, i) => {
+    let sales = 0, opex = 0, overhead = 0;
+    let budgetSales = 0, budgetOpex = 0, budgetOverhead = 0;
+
+    for (const svc of SERVICES) {
+      const data = serviceData[svc.key];
+      const rolling = getRollingServiceForecast(data.actuals, data.forecast, periodsCompleted);
+      sales += rolling[i]?.salesCost ?? 0;
+      opex += rolling[i]?.operatingCost ?? 0;
+      overhead += rolling[i]?.overheadCost ?? 0;
+      budgetSales += data.budget[i]?.salesCost ?? 0;
+      budgetOpex += data.budget[i]?.operatingCost ?? 0;
+      budgetOverhead += data.budget[i]?.overheadCost ?? 0;
+    }
+    return {
+      period: `P${i + 1}`,
+      sales: i < periodsCompleted ? sales : null,
+      budgetSales,
+      opex: i < periodsCompleted ? opex : null,
+      budgetOpex,
+      overhead: i < periodsCompleted ? overhead : null,
+      budgetOverhead,
+    };
+  });
+
+  const tooltipStyle = {
+    contentStyle: { background: "#fff", border: "1px solid #E2E8F0", borderRadius: "10px", fontSize: 12, boxShadow: "0 4px 16px rgba(15,23,42,0.08)" },
+    labelStyle: { color: "#0F172A", fontWeight: 600, fontSize: 12 },
+    itemStyle: { color: "#1E293B" },
+    cursor: { fill: "rgba(30,42,94,0.025)" },
+    wrapperStyle: { outline: "none" },
+  };
+
+  return (
+    <div className="space-y-5">
+      <div className="flex items-center gap-2">
+        <h2 className="text-base font-bold text-[#1E2A5E]">Overall Expenses (Company-Wide)</h2>
+        <span className="text-[10px] text-slate-400 font-medium mt-0.5">Actual vs Budget by period across all services</span>
+      </div>
+
+      <div className="spotlight-card p-5 sm:p-6">
+        <h3 className="text-sm font-semibold text-slate-800 mb-1">Sales Expense: Actual vs Budget</h3>
+        <p className="text-[11px] text-slate-400 mb-5">Company-wide sales expense per period</p>
+        <ResponsiveContainer width="100%" height={220}>
+          <BarChart data={chartData}>
+            <CartesianGrid strokeDasharray="3 3" stroke="#F1F5F9" />
+            <XAxis dataKey="period" tick={{ fill: "#64748B", fontSize: 11 }} axisLine={{ stroke: "#E2E8F0" }} />
+            <YAxis tick={{ fill: "#64748B", fontSize: 11 }} tickFormatter={(v: number) => fmtCurrency(v, true)} axisLine={{ stroke: "#E2E8F0" }} />
+            <Tooltip {...tooltipStyle} formatter={(v) => fmtCurrency(Number(v))} />
+            <Legend wrapperStyle={{ fontSize: 11, color: "#64748B", paddingTop: 10 }} />
+            <Bar dataKey="budgetSales" fill="rgba(30,58,138,0.15)" name="Budget" radius={[4, 4, 0, 0]} />
+            <Bar dataKey="sales" fill="#4338CA" name="Actual" radius={[4, 4, 0, 0]} />
+          </BarChart>
+        </ResponsiveContainer>
+      </div>
+
+      <div className="spotlight-card p-5 sm:p-6">
+        <h3 className="text-sm font-semibold text-slate-800 mb-1">Operating Expense: Actual vs Budget</h3>
+        <p className="text-[11px] text-slate-400 mb-5">Company-wide operating costs per period</p>
+        <ResponsiveContainer width="100%" height={220}>
+          <BarChart data={chartData}>
+            <CartesianGrid strokeDasharray="3 3" stroke="#F1F5F9" />
+            <XAxis dataKey="period" tick={{ fill: "#64748B", fontSize: 11 }} axisLine={{ stroke: "#E2E8F0" }} />
+            <YAxis tick={{ fill: "#64748B", fontSize: 11 }} tickFormatter={(v: number) => fmtCurrency(v, true)} axisLine={{ stroke: "#E2E8F0" }} />
+            <Tooltip {...tooltipStyle} formatter={(v) => fmtCurrency(Number(v))} />
+            <Legend wrapperStyle={{ fontSize: 11, color: "#64748B", paddingTop: 10 }} />
+            <Bar dataKey="budgetOpex" fill="rgba(30,58,138,0.15)" name="Budget" radius={[4, 4, 0, 0]} />
+            <Bar dataKey="opex" fill="#065F46" name="Actual" radius={[4, 4, 0, 0]} />
+          </BarChart>
+        </ResponsiveContainer>
+      </div>
+
+      <div className="spotlight-card p-5 sm:p-6">
+        <h3 className="text-sm font-semibold text-slate-800 mb-1">Overhead: Actual vs Budget</h3>
+        <p className="text-[11px] text-slate-400 mb-5">Company-wide fixed overhead per period</p>
+        <ResponsiveContainer width="100%" height={220}>
+          <BarChart data={chartData}>
+            <CartesianGrid strokeDasharray="3 3" stroke="#F1F5F9" />
+            <XAxis dataKey="period" tick={{ fill: "#64748B", fontSize: 11 }} axisLine={{ stroke: "#E2E8F0" }} />
+            <YAxis tick={{ fill: "#64748B", fontSize: 11 }} tickFormatter={(v: number) => fmtCurrency(v, true)} axisLine={{ stroke: "#E2E8F0" }} />
+            <Tooltip {...tooltipStyle} formatter={(v) => fmtCurrency(Number(v))} />
+            <Legend wrapperStyle={{ fontSize: 11, color: "#64748B", paddingTop: 10 }} />
+            <Bar dataKey="budgetOverhead" fill="rgba(30,58,138,0.15)" name="Budget" radius={[4, 4, 0, 0]} />
+            <Bar dataKey="overhead" fill="#B8860B" name="Actual" radius={[4, 4, 0, 0]} />
+          </BarChart>
+        </ResponsiveContainer>
+      </div>
     </div>
   );
 }

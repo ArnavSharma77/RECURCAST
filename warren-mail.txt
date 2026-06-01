@@ -1,25 +1,38 @@
 Hi Warren,
 
-Latest updates:
+Updates based on your feedback:
 
-1. Tooltip Readability - Fixed
-   Graph pop-up text is now dark and easy to read.
-   Budget and Actual values both display clearly.
+1. Overall Expenses Moved to Premium
+   The three expense charts (Sales, Operating, Overhead
+   Actual vs Budget) are now in the Premium Analytics
+   section only. Removed from the base Dashboard.
+   This gives us leverage if clients push to include it
+   in the base tier.
 
-2. Staff Cost Clarified
-   Label now reads "Base Staff Cost (per 4-week period)."
+2. What-If Parameters Start at Zero
+   All sliders now default to 0 when the page loads.
+   Cancellation rate still defaults to whatever the
+   base rate is (only changes if you explicitly set it).
+   This way the scenario shows zero impact until you
+   actively adjust something.
 
-3. Overall Expenses - Charts Added
-   Sales, Operating, and Overhead now show as
-   Actual vs Budget bar charts on the Dashboard,
-   same style as Revenue vs Budget.
+3. One-Off Revenue Fixed
+   - Label changed from "Installs + Product" to just
+     "One-Off Revenue"
+   - Numbers now pull from the dedicated One-Offs line
+     ($4K/period budget) instead of summing installs
+     and product revenue
 
-4. Landing Page - Refined & Compacted
-   - Tagline kept: "Stop Hoping. Build a Strategy."
-   - Tighter spacing throughout; Premium and Quick Start
-     sit side by side on larger screens
-   - Try What-If and Explore Premium at top as primary CTAs
-   - Royal blue animated gradient on Premium card
+4. AGP and Avg Weekly Rev/Cust - Confirmed
+   - Vehicle expense IS included in the AGP deduction
+     (formula: GP - Franchise 13% - Route Labor 24%
+     - Vehicle Expense)
+   - One-off service revenue IS excluded from the
+     Avg Weekly Rev/Cust calculation (it only uses
+     recurring service revenue / customer-weeks)
+   - Updated the footnote on Dashboard to say
+     "Vehicle Expense" explicitly instead of
+     "Auto Expense"
 
 All live on production.
 
