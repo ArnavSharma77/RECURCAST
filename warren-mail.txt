@@ -1,0 +1,27 @@
+Hi Warren,
+
+Latest updates:
+
+1. Tooltip Readability - Fixed
+   Graph pop-up text is now dark and easy to read.
+   Budget and Actual values both display clearly.
+
+2. Staff Cost Clarified
+   Label now reads "Base Staff Cost (per 4-week period)."
+
+3. Overall Expenses - Charts Added
+   Sales, Operating, and Overhead now show as
+   Actual vs Budget bar charts on the Dashboard,
+   same style as Revenue vs Budget.
+
+4. Landing Page - Refined & Compacted
+   - Tagline kept: "Stop Hoping. Build a Strategy."
+   - Tighter spacing throughout; Premium and Quick Start
+     sit side by side on larger screens
+   - Try What-If and Explore Premium at top as primary CTAs
+   - Royal blue animated gradient on Premium card
+
+All live on production.
+
+Best,
+Arnav

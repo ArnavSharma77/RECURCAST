@@ -1,36 +1,54 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# RecurCast Web Application
 
-## Getting Started
+Financial forecasting & growth modeling for recurring revenue businesses.  
+Built by **ClearPath Analytics**.
 
-First, run the development server:
+## Quick Start
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+# Frontend (Next.js)
+npm install
+npm run dev        # → http://localhost:3000
+
+# Backend (FastAPI)
+cd backend
+pip install -r requirements.txt
+uvicorn app.main:app --reload --port 8000
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+## Architecture
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+| Layer | Tech | Purpose |
+|-------|------|---------|
+| Frontend | Next.js + Tailwind + Recharts | Dashboard, What-If tool, Intake form |
+| Backend | FastAPI (Python) | PDF reports, forecast engine, client CRUD |
+| Database | Supabase | Auth, client data, row-level security |
+| What-If Engine | TypeScript (client-side) | Instant scenario calculations |
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## Pages
 
-## Learn More
+- `/` — Landing page
+- `/dashboard` — KPIs, revenue vs budget charts, variance analysis
+- `/whatif` — Interactive What-If tool with real-time sliders & payback
+- `/intake` — Client onboarding (minimal input + P&L upload)
+- `/pricing` — Tier comparison (Essentials / Growth / Premium)
 
-To learn more about Next.js, take a look at the following resources:
+## Key Features
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+- **Instant What-If**: Sliders update charts in real-time (no server round-trip)
+- **\*12/\*16 Revenue Model**: Additive recurring revenue growth
+- **AGP Payback**: Salesperson breakeven with 1-period collection delay
+- **Auto-Derived Metrics**: Upload P&L → expense ratios calculated automatically
+- **Tier Gating**: Essentials ($49), Growth ($89), Premium ($149)
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+## Environment Variables
 
-## Deploy on Vercel
+```env
+NEXT_PUBLIC_SUPABASE_URL=https://your-project.supabase.co
+NEXT_PUBLIC_SUPABASE_ANON_KEY=your-anon-key
+```
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+## Database Migration
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+SQL migration is in `supabase/migrations/001_create_recurcast_schema.sql`.  
+Apply via Supabase dashboard SQL editor or CLI.
