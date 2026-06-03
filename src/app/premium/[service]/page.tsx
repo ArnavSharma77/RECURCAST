@@ -12,7 +12,7 @@ import type { ClientRow } from "@/lib/supabase/types";
 import { ArrowLeft, Loader2 } from "lucide-react";
 import {
   ComposedChart, Bar, Line, XAxis, YAxis, CartesianGrid,
-  Tooltip, Legend, ResponsiveContainer, BarChart,
+  Tooltip, Legend, ResponsiveContainer, BarChart, PieChart, Pie, Cell,
 } from "recharts";
 
 function getClientId(): string | null {
@@ -33,11 +33,18 @@ const PALETTE = {
   labor: "#4338CA",
   laborForecast: "rgba(67,56,202,0.25)",
   cogs: "#1E3A8A",
+  franchiseFee: "#7C3AED",
+  routeLabor: "#DC2626",
+  vehicle: "#EA580C",
   sales: "#4338CA",
   opex: "#065F46",
-  overheadBudget: "#1E3A8A",
-  overheadActual: "#B8860B",
+  overhead: "#B8860B",
 };
+
+const COST_COLORS = [
+  "#1E3A8A", "#4338CA", "#7C3AED", "#DC2626",
+  "#EA580C", "#065F46", "#B8860B",
+];
 
 export default function ServiceDeepDive() {
   const params = useParams();
@@ -110,8 +117,20 @@ export default function ServiceDeepDive() {
   const ytdAGPVar = ytdAGP - ytdBudgetAGP;
   const ytdLabor = ytdActuals.reduce((s, p) => s + p.laborCost, 0);
   const ytdCOGS = ytdActuals.reduce((s, p) => s + p.cogs, 0);
+  const ytdNetIncome = ytdActuals.reduce((s, p) => s + p.netIncome, 0);
+  const ytdBudgetNI = ytdBudget.reduce((s, p) => s + p.netIncome, 0);
   const agpPct = ytdRev > 0 ? ytdAGP / ytdRev : 0;
   const laborPct = ytdRev > 0 ? ytdLabor / ytdRev : 0;
+  const netMargin = ytdRev > 0 ? ytdNetIncome / ytdRev : 0;
+
+  // P&L summary for YTD
+  const ytdFranchiseFee = ytdActuals.reduce((s, p) => s + p.franchiseFee, 0);
+  const ytdRouteLabor = ytdActuals.reduce((s, p) => s + p.routeLabor, 0);
+  const ytdVehicle = ytdActuals.reduce((s, p) => s + p.vehicleExpense, 0);
+  const ytdSales = ytdActuals.reduce((s, p) => s + p.salesCost, 0);
+  const ytdOpex = ytdActuals.reduce((s, p) => s + p.operatingCost, 0);
+  const ytdOverhead = ytdActuals.reduce((s, p) => s + p.overheadCost, 0);
+  const ytdGP = ytdActuals.reduce((s, p) => s + p.grossProfit, 0);
 
   const revenueChartData = rolling.map((p, i) => ({
     period: `P${i + 1}`,
@@ -140,6 +159,24 @@ export default function ServiceDeepDive() {
     budget: budget[i]?.cogs ?? 0,
   }));
 
+  // Per-period net income chart
+  const netIncomeChartData = rolling.map((p, i) => ({
+    period: `P${i + 1}`,
+    actual: i < periodsCompleted ? p.netIncome : null,
+    budget: budget[i]?.netIncome ?? 0,
+    forecast: p.netIncome,
+  }));
+
+  // Cost allocation pie chart
+  const costPieData = [
+    { name: "COGS", value: ytdCOGS, color: PALETTE.cogs },
+    { name: "Franchise Fee", value: ytdFranchiseFee, color: PALETTE.franchiseFee },
+    { name: "Route Labor", value: ytdRouteLabor, color: PALETTE.routeLabor },
+    { name: "Vehicle", value: ytdVehicle, color: PALETTE.vehicle },
+    { name: "Sales", value: ytdSales, color: PALETTE.sales },
+    { name: "Operating", value: ytdOpex, color: PALETTE.opex },
+    { name: "Overhead", value: ytdOverhead, color: PALETTE.overhead },
+  ].filter(d => d.value > 0);
 
   const tooltipStyle = {
     contentStyle: { background: "#ffffff", border: "1px solid #E2E8F0", borderRadius: 12, boxShadow: "0 8px 32px rgba(30,42,94,0.08)" },
@@ -180,30 +217,122 @@ export default function ServiceDeepDive() {
       </div>
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 py-5 space-y-5">
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+        {/* KPI row */}
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
           <KpiMini label="YTD Revenue" value={fmtCurrency(ytdRev)} sub={`Var: ${fmtCurrency(ytdRevVar)}`} positive={ytdRevVar >= 0} />
           <KpiMini label="AGP" value={fmtCurrency(ytdAGP)} sub={`Var: ${fmtCurrency(ytdAGPVar)}`} positive={ytdAGPVar >= 0} />
           <KpiMini label="AGP Margin" value={fmtPct(agpPct)} />
-          <KpiMini label="YTD Labor" value={fmtCurrency(ytdLabor)} sub={`${(laborPct * 100).toFixed(1)}% of rev`} />
-          <KpiMini label="YTD COGS" value={fmtCurrency(ytdCOGS)} />
+          <KpiMini label="Net Income" value={fmtCurrency(ytdNetIncome)} sub={`Var: ${fmtCurrency(ytdNetIncome - ytdBudgetNI)}`} positive={ytdNetIncome >= ytdBudgetNI} />
+          <KpiMini label="Net Margin" value={fmtPct(netMargin)} sub={netMargin >= 0 ? "Profitable" : "Loss"} positive={netMargin >= 0} />
+          <KpiMini label="YTD COGS" value={fmtCurrency(ytdCOGS)} sub={`${ytdRev > 0 ? ((ytdCOGS / ytdRev) * 100).toFixed(1) : 0}% of rev`} />
         </div>
 
-        <ChartPanel title="Revenue: Actual vs Budget vs Forecast" subtitle="Period-level revenue tracking with rolling forecast overlay">
-          <ResponsiveContainer width="100%" height={280}>
-            <ComposedChart data={revenueChartData}>
+        {/* Per-Service P&L Statement */}
+        <div className="spotlight-card p-5 sm:p-6">
+          <h3 className="text-sm font-semibold text-slate-800 mb-1">Service P&L Breakdown</h3>
+          <p className="text-[11px] text-slate-500 mb-4">YTD income statement with individual cost allocation &middot; {periodsCompleted} periods</p>
+
+          <div className="flex items-center py-2 px-1 mb-1">
+            <span className="flex-1 text-[10px] font-semibold uppercase tracking-[0.12em] text-slate-400" />
+            <span className="w-24 text-right text-[10px] font-semibold uppercase tracking-[0.12em] text-slate-400">Actual</span>
+            <span className="w-24 text-right text-[10px] font-semibold uppercase tracking-[0.12em] text-slate-400">Budget</span>
+            <span className="w-20 text-right text-[10px] font-semibold uppercase tracking-[0.12em] text-slate-400">Variance</span>
+          </div>
+
+          <div className="space-y-0.5">
+            <PLRow label="Revenue" actual={ytdRev} budget={ytdBudgetRev} bold indent={0} />
+            <PLRow label="Cost of Goods Sold" actual={ytdCOGS} budget={ytdBudget.reduce((s, p) => s + p.cogs, 0)} indent={1} negative />
+            <PLRow label="Gross Profit" actual={ytdGP} budget={ytdBudget.reduce((s, p) => s + p.grossProfit, 0)} bold indent={0} border />
+
+            <div className="pt-2">
+              <p className="text-[10px] text-slate-400 uppercase tracking-[0.14em] font-semibold mb-1 pl-1">AGP Deductions</p>
+            </div>
+            <PLRow label="Franchise Fee (13%)" actual={ytdFranchiseFee} budget={ytdBudget.reduce((s, p) => s + p.franchiseFee, 0)} indent={1} negative />
+            <PLRow label="Route/Tech Labor" actual={ytdRouteLabor} budget={ytdBudget.reduce((s, p) => s + p.routeLabor, 0)} indent={1} negative />
+            <PLRow label="Vehicle Expense" actual={ytdVehicle} budget={ytdBudget.reduce((s, p) => s + p.vehicleExpense, 0)} indent={1} negative />
+            <PLRow label="Adjusted Gross Profit" actual={ytdAGP} budget={ytdBudgetAGP} bold indent={0} border accent />
+
+            <div className="pt-2">
+              <p className="text-[10px] text-slate-400 uppercase tracking-[0.14em] font-semibold mb-1 pl-1">Operating Expenses</p>
+            </div>
+            <PLRow label="Sales Expense" actual={ytdSales} budget={ytdBudget.reduce((s, p) => s + p.salesCost, 0)} indent={1} negative />
+            <PLRow label="Operating Expense" actual={ytdOpex} budget={ytdBudget.reduce((s, p) => s + p.operatingCost, 0)} indent={1} negative />
+            <PLRow label="Overhead" actual={ytdOverhead} budget={ytdBudget.reduce((s, p) => s + p.overheadCost, 0)} indent={1} negative />
+
+            <PLRow label="Net Income" actual={ytdNetIncome} budget={ytdBudgetNI} bold indent={0} border accent />
+            <PLRow label="Net Margin" actual={netMargin} budget={ytdBudgetRev > 0 ? ytdBudgetNI / ytdBudgetRev : 0} indent={0} pct />
+          </div>
+        </div>
+
+        {/* Cost Allocation Pie + Revenue Chart side by side */}
+        <div className="grid lg:grid-cols-5 gap-5">
+          <div className="lg:col-span-2 spotlight-card p-5 sm:p-6">
+            <h3 className="text-sm font-semibold text-slate-800 mb-1">Cost Allocation</h3>
+            <p className="text-[11px] text-slate-500 mb-4">YTD cost breakdown for {label}</p>
+            <ResponsiveContainer width="100%" height={240}>
+              <PieChart>
+                <Pie
+                  data={costPieData}
+                  dataKey="value"
+                  nameKey="name"
+                  cx="50%"
+                  cy="50%"
+                  outerRadius={90}
+                  innerRadius={45}
+                  strokeWidth={2}
+                  stroke="#fff"
+                >
+                  {costPieData.map((entry, idx) => (
+                    <Cell key={idx} fill={entry.color} />
+                  ))}
+                </Pie>
+                <Tooltip
+                  formatter={(v) => fmtCurrency(Number(v))}
+                  contentStyle={{ background: "#fff", border: "1px solid #E2E8F0", borderRadius: 10, fontSize: 12, boxShadow: "0 4px 16px rgba(15,23,42,0.08)" }}
+                />
+                <Legend
+                  wrapperStyle={{ fontSize: 10, color: "#64748B" }}
+                  formatter={(value) => <span className="text-[10px] text-slate-600">{value}</span>}
+                />
+              </PieChart>
+            </ResponsiveContainer>
+          </div>
+
+          <div className="lg:col-span-3">
+            <ChartPanel title="Revenue: Actual vs Budget vs Forecast" subtitle="Period-level revenue tracking with rolling forecast overlay">
+              <ResponsiveContainer width="100%" height={240}>
+                <ComposedChart data={revenueChartData}>
+                  <CartesianGrid strokeDasharray="3 3" stroke={CHART_GRID} />
+                  <XAxis dataKey="period" tick={{ fill: CHART_AXIS_TICK, fontSize: 11 }} axisLine={{ stroke: CHART_AXIS_LINE }} />
+                  <YAxis tick={{ fill: CHART_AXIS_TICK, fontSize: 11 }} tickFormatter={(v: number) => fmtCurrency(v, true)} axisLine={{ stroke: CHART_AXIS_LINE }} />
+                  <Tooltip {...tooltipStyle} formatter={(v) => fmtCurrency(Number(v))} />
+                  <Legend wrapperStyle={{ fontSize: 11, color: "#64748B", paddingTop: 8 }} />
+                  <Bar dataKey="budget" fill={PALETTE.budget} name="Budget" radius={[4, 4, 0, 0]} />
+                  <Bar dataKey="actual" fill={color} name="Actual" radius={[4, 4, 0, 0]} />
+                  <Line type="monotone" dataKey="forecast" stroke={PALETTE.forecast} strokeWidth={2} dot={{ r: 2.5, fill: PALETTE.forecast }} name="Forecast" strokeDasharray="5 5" />
+                </ComposedChart>
+              </ResponsiveContainer>
+            </ChartPanel>
+          </div>
+        </div>
+
+        {/* Net Income per period */}
+        <ChartPanel title="Net Income: Actual vs Budget vs Forecast" subtitle="Per-service profitability by period">
+          <ResponsiveContainer width="100%" height={260}>
+            <ComposedChart data={netIncomeChartData}>
               <CartesianGrid strokeDasharray="3 3" stroke={CHART_GRID} />
               <XAxis dataKey="period" tick={{ fill: CHART_AXIS_TICK, fontSize: 11 }} axisLine={{ stroke: CHART_AXIS_LINE }} />
               <YAxis tick={{ fill: CHART_AXIS_TICK, fontSize: 11 }} tickFormatter={(v: number) => fmtCurrency(v, true)} axisLine={{ stroke: CHART_AXIS_LINE }} />
               <Tooltip {...tooltipStyle} formatter={(v) => fmtCurrency(Number(v))} />
               <Legend wrapperStyle={{ fontSize: 11, color: "#64748B", paddingTop: 8 }} />
               <Bar dataKey="budget" fill={PALETTE.budget} name="Budget" radius={[4, 4, 0, 0]} />
-              <Bar dataKey="actual" fill={color} name="Actual" radius={[4, 4, 0, 0]} />
+              <Bar dataKey="actual" fill="#065F46" name="Actual" radius={[4, 4, 0, 0]} />
               <Line type="monotone" dataKey="forecast" stroke={PALETTE.forecast} strokeWidth={2} dot={{ r: 2.5, fill: PALETTE.forecast }} name="Forecast" strokeDasharray="5 5" />
             </ComposedChart>
           </ResponsiveContainer>
         </ChartPanel>
 
-        <ChartPanel title="AGP: Actual vs Budget vs Forecast" subtitle="Adjusted Gross Profit tracking per period">
+        <ChartPanel title="AGP: Actual vs Budget vs Forecast" subtitle="Adjusted Gross Profit (GP - Franchise Fee - Route Labor - Vehicle)">
           <ResponsiveContainer width="100%" height={260}>
             <ComposedChart data={agpChartData}>
               <CartesianGrid strokeDasharray="3 3" stroke={CHART_GRID} />
@@ -218,40 +347,42 @@ export default function ServiceDeepDive() {
           </ResponsiveContainer>
         </ChartPanel>
 
-        <ChartPanel title="Labor Cost: Actual vs Forecast" subtitle="Labor cost per period with % of revenue trend">
-          <ResponsiveContainer width="100%" height={260}>
-            <ComposedChart data={laborChartData}>
-              <CartesianGrid strokeDasharray="3 3" stroke={CHART_GRID} />
-              <XAxis dataKey="period" tick={{ fill: CHART_AXIS_TICK, fontSize: 11 }} axisLine={{ stroke: CHART_AXIS_LINE }} />
-              <YAxis yAxisId="left" tick={{ fill: CHART_AXIS_TICK, fontSize: 11 }} tickFormatter={(v: number) => fmtCurrency(v, true)} axisLine={{ stroke: CHART_AXIS_LINE }} />
-              <YAxis yAxisId="right" orientation="right" tick={{ fill: CHART_AXIS_TICK, fontSize: 11 }} tickFormatter={(v: number) => `${v.toFixed(0)}%`} axisLine={{ stroke: CHART_AXIS_LINE }} />
-              <Tooltip {...tooltipStyle} formatter={(v, name) => [String(name).includes("pct") ? `${Number(v).toFixed(1)}%` : fmtCurrency(Number(v)), name]} />
-              <Legend wrapperStyle={{ fontSize: 11, color: "#64748B", paddingTop: 8 }} />
-              <Bar yAxisId="left" dataKey="actual" fill={PALETTE.labor} name="Actual Labor" radius={[4, 4, 0, 0]} />
-              <Bar yAxisId="left" dataKey="forecast" fill={PALETTE.laborForecast} name="Forecast Labor" radius={[4, 4, 0, 0]} />
-              <Line yAxisId="right" type="monotone" dataKey="pctOfRev" stroke={PALETTE.forecast} strokeWidth={2} dot={{ r: 2.5, fill: PALETTE.forecast }} name="% of Revenue" />
-            </ComposedChart>
-          </ResponsiveContainer>
-        </ChartPanel>
+        <div className="grid lg:grid-cols-2 gap-5">
+          <ChartPanel title="Labor Cost: Actual vs Forecast" subtitle="With % of revenue trend">
+            <ResponsiveContainer width="100%" height={240}>
+              <ComposedChart data={laborChartData}>
+                <CartesianGrid strokeDasharray="3 3" stroke={CHART_GRID} />
+                <XAxis dataKey="period" tick={{ fill: CHART_AXIS_TICK, fontSize: 11 }} axisLine={{ stroke: CHART_AXIS_LINE }} />
+                <YAxis yAxisId="left" tick={{ fill: CHART_AXIS_TICK, fontSize: 11 }} tickFormatter={(v: number) => fmtCurrency(v, true)} axisLine={{ stroke: CHART_AXIS_LINE }} />
+                <YAxis yAxisId="right" orientation="right" tick={{ fill: CHART_AXIS_TICK, fontSize: 11 }} tickFormatter={(v: number) => `${v.toFixed(0)}%`} axisLine={{ stroke: CHART_AXIS_LINE }} />
+                <Tooltip {...tooltipStyle} formatter={(v, name) => [String(name).includes("pct") ? `${Number(v).toFixed(1)}%` : fmtCurrency(Number(v)), name]} />
+                <Legend wrapperStyle={{ fontSize: 11, color: "#64748B", paddingTop: 8 }} />
+                <Bar yAxisId="left" dataKey="actual" fill={PALETTE.labor} name="Actual Labor" radius={[4, 4, 0, 0]} />
+                <Bar yAxisId="left" dataKey="forecast" fill={PALETTE.laborForecast} name="Forecast Labor" radius={[4, 4, 0, 0]} />
+                <Line yAxisId="right" type="monotone" dataKey="pctOfRev" stroke={PALETTE.forecast} strokeWidth={2} dot={{ r: 2.5, fill: PALETTE.forecast }} name="% of Revenue" />
+              </ComposedChart>
+            </ResponsiveContainer>
+          </ChartPanel>
 
-        <ChartPanel title="COGS: Actual vs Budget" subtitle="Cost of goods sold variance tracking">
-          <ResponsiveContainer width="100%" height={240}>
-            <BarChart data={cogsChartData}>
-              <CartesianGrid strokeDasharray="3 3" stroke={CHART_GRID} />
-              <XAxis dataKey="period" tick={{ fill: CHART_AXIS_TICK, fontSize: 11 }} axisLine={{ stroke: CHART_AXIS_LINE }} />
-              <YAxis tick={{ fill: CHART_AXIS_TICK, fontSize: 11 }} tickFormatter={(v: number) => fmtCurrency(v, true)} axisLine={{ stroke: CHART_AXIS_LINE }} />
-              <Tooltip {...tooltipStyle} formatter={(v) => fmtCurrency(Number(v))} />
-              <Legend wrapperStyle={{ fontSize: 11, color: "#64748B", paddingTop: 8 }} />
-              <Bar dataKey="budget" fill={PALETTE.budget} name="Budget" radius={[4, 4, 0, 0]} />
-              <Bar dataKey="actual" fill={PALETTE.cogs} name="Actual" radius={[4, 4, 0, 0]} />
-            </BarChart>
-          </ResponsiveContainer>
-        </ChartPanel>
+          <ChartPanel title="COGS: Actual vs Budget" subtitle="Cost of goods sold variance">
+            <ResponsiveContainer width="100%" height={240}>
+              <BarChart data={cogsChartData}>
+                <CartesianGrid strokeDasharray="3 3" stroke={CHART_GRID} />
+                <XAxis dataKey="period" tick={{ fill: CHART_AXIS_TICK, fontSize: 11 }} axisLine={{ stroke: CHART_AXIS_LINE }} />
+                <YAxis tick={{ fill: CHART_AXIS_TICK, fontSize: 11 }} tickFormatter={(v: number) => fmtCurrency(v, true)} axisLine={{ stroke: CHART_AXIS_LINE }} />
+                <Tooltip {...tooltipStyle} formatter={(v) => fmtCurrency(Number(v))} />
+                <Legend wrapperStyle={{ fontSize: 11, color: "#64748B", paddingTop: 8 }} />
+                <Bar dataKey="budget" fill={PALETTE.budget} name="Budget" radius={[4, 4, 0, 0]} />
+                <Bar dataKey="actual" fill={PALETTE.cogs} name="Actual" radius={[4, 4, 0, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
+          </ChartPanel>
+        </div>
 
-
+        {/* Full period detail table with all cost categories */}
         <div className="spotlight-card p-5 sm:p-6 overflow-x-auto">
-          <h3 className="text-sm font-semibold text-slate-800 mb-1">Period Detail</h3>
-          <p className="text-[11px] text-slate-500 mb-5">All metrics by period</p>
+          <h3 className="text-sm font-semibold text-slate-800 mb-1">Period Detail — Full P&L</h3>
+          <p className="text-[11px] text-slate-500 mb-5">All cost categories by period</p>
 
           <table className="w-full text-xs">
             <thead>
@@ -260,33 +391,53 @@ export default function ServiceDeepDive() {
                 <th className="py-2.5 px-2 text-left font-medium">Type</th>
                 <th className="py-2.5 px-2 text-right font-medium">Revenue</th>
                 <th className="py-2.5 px-2 text-right font-medium">COGS</th>
+                <th className="py-2.5 px-2 text-right font-medium">GP</th>
+                <th className="py-2.5 px-2 text-right font-medium">Franch. Fee</th>
+                <th className="py-2.5 px-2 text-right font-medium">Route Labor</th>
+                <th className="py-2.5 px-2 text-right font-medium">Vehicle</th>
                 <th className="py-2.5 px-2 text-right font-medium">AGP</th>
-                <th className="py-2.5 px-2 text-right font-medium">AGP %</th>
-                <th className="py-2.5 px-2 text-right font-medium">Labor</th>
-                <th className="py-2.5 px-2 text-right font-medium">Labor %</th>
+                <th className="py-2.5 px-2 text-right font-medium">Sales</th>
+                <th className="py-2.5 px-2 text-right font-medium">Opex</th>
+                <th className="py-2.5 px-2 text-right font-medium">Overhead</th>
+                <th className="py-2.5 px-2 text-right font-medium">Net Income</th>
+                <th className="py-2.5 px-2 text-right font-medium">Margin</th>
               </tr>
             </thead>
             <tbody>
-              {rolling.map((p, i) => (
-                <tr key={i} className={`border-b border-slate-50 hover:bg-slate-50/50 ${i < periodsCompleted ? "bg-indigo-50/30" : ""}`}>
-                  <td className="py-2 px-2 font-medium text-slate-700">P{i + 1}</td>
-                  <td className="py-2 px-2">
-                    <span className={`text-[10px] px-2 py-0.5 rounded-full font-medium ${i < periodsCompleted ? "bg-indigo-100 text-indigo-800" : "bg-slate-100 text-slate-500"}`}>
-                      {i < periodsCompleted ? "Actual" : "Forecast"}
-                    </span>
-                  </td>
-                  <td className="py-2 px-2 text-right text-slate-900 tabular-nums">{fmtCurrency(p.revenue)}</td>
-                  <td className="py-2 px-2 text-right text-slate-500 tabular-nums">{fmtCurrency(p.cogs)}</td>
-                  <td className="py-2 px-2 text-right text-emerald-800 tabular-nums">{fmtCurrency(p.agp)}</td>
-                  <td className="py-2 px-2 text-right text-slate-700 tabular-nums">{p.revenue > 0 ? `${((p.agp / p.revenue) * 100).toFixed(1)}%` : "N/A"}</td>
-                  <td className="py-2 px-2 text-right text-slate-700 tabular-nums">{fmtCurrency(p.laborCost)}</td>
-                  <td className="py-2 px-2 text-right text-slate-400 tabular-nums">{p.revenue > 0 ? `${((p.laborCost / p.revenue) * 100).toFixed(1)}%` : "N/A"}</td>
-                </tr>
-              ))}
+              {rolling.map((p, i) => {
+                const isActual = i < periodsCompleted;
+                return (
+                  <tr key={i} className={`border-b border-slate-50 hover:bg-slate-50/50 ${isActual ? "bg-indigo-50/30" : ""}`}>
+                    <td className="py-2 px-2 font-medium text-slate-700">P{i + 1}</td>
+                    <td className="py-2 px-2">
+                      <span className={`text-[10px] px-2 py-0.5 rounded-full font-medium ${isActual ? "bg-indigo-100 text-indigo-800" : "bg-slate-100 text-slate-500"}`}>
+                        {isActual ? "Actual" : "Forecast"}
+                      </span>
+                    </td>
+                    <td className="py-2 px-2 text-right text-slate-900 tabular-nums">{fmtCurrency(p.revenue)}</td>
+                    <td className="py-2 px-2 text-right text-slate-500 tabular-nums">{fmtCurrency(p.cogs)}</td>
+                    <td className="py-2 px-2 text-right text-slate-700 tabular-nums">{fmtCurrency(p.grossProfit)}</td>
+                    <td className="py-2 px-2 text-right text-purple-700 tabular-nums">{fmtCurrency(p.franchiseFee)}</td>
+                    <td className="py-2 px-2 text-right text-red-700 tabular-nums">{fmtCurrency(p.routeLabor)}</td>
+                    <td className="py-2 px-2 text-right text-orange-700 tabular-nums">{fmtCurrency(p.vehicleExpense)}</td>
+                    <td className="py-2 px-2 text-right text-emerald-800 tabular-nums font-medium">{fmtCurrency(p.agp)}</td>
+                    <td className="py-2 px-2 text-right text-slate-500 tabular-nums">{fmtCurrency(p.salesCost)}</td>
+                    <td className="py-2 px-2 text-right text-slate-500 tabular-nums">{fmtCurrency(p.operatingCost)}</td>
+                    <td className="py-2 px-2 text-right text-slate-500 tabular-nums">{fmtCurrency(p.overheadCost)}</td>
+                    <td className={`py-2 px-2 text-right tabular-nums font-medium ${p.netIncome >= 0 ? "text-emerald-700" : "text-red-600"}`}>
+                      {fmtCurrency(p.netIncome)}
+                    </td>
+                    <td className={`py-2 px-2 text-right tabular-nums ${p.contributionMargin >= 0 ? "text-slate-600" : "text-red-500"}`}>
+                      {(p.contributionMargin * 100).toFixed(1)}%
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>
 
+        {/* Navigate to other services */}
         <div className="flex items-center gap-2 flex-wrap">
           {SERVICES.filter(s => s.key !== serviceKey).map(svc => (
             <Link
@@ -328,6 +479,41 @@ function KpiMini({ label, value, sub, positive }: { label: string; value: string
           {sub}
         </p>
       )}
+    </div>
+  );
+}
+
+function PLRow({ label, actual, budget, bold, indent, border, accent, negative, pct }: {
+  label: string;
+  actual: number;
+  budget: number;
+  bold?: boolean;
+  indent?: number;
+  border?: boolean;
+  accent?: boolean;
+  negative?: boolean;
+  pct?: boolean;
+}) {
+  const variance = actual - budget;
+  const pl = indent ? `pl-${indent * 4}` : "";
+  const fmt = pct ? fmtPct : fmtCurrency;
+
+  return (
+    <div className={`flex items-center py-2 px-1 ${border ? "border-t border-slate-200 mt-1" : ""} ${bold ? "bg-slate-50/50" : ""}`}>
+      <span className={`flex-1 text-xs ${bold ? "font-semibold" : "font-normal"} ${accent ? "text-[#1E3A8A]" : "text-slate-700"}`}
+        style={{ paddingLeft: (indent ?? 0) * 16 }}
+      >
+        {label}
+      </span>
+      <span className={`w-24 text-right text-xs tabular-nums ${bold ? "font-semibold" : ""} ${accent ? "text-[#1E3A8A]" : negative ? "text-slate-600" : "text-slate-900"}`}>
+        {fmt(actual)}
+      </span>
+      <span className="w-24 text-right text-xs tabular-nums text-slate-400">
+        {fmt(budget)}
+      </span>
+      <span className={`w-20 text-right text-xs tabular-nums font-medium ${pct ? (variance >= 0 ? "text-emerald-700" : "text-red-600") : variance >= 0 ? (negative ? "text-red-600" : "text-emerald-700") : (negative ? "text-emerald-700" : "text-red-600")}`}>
+        {pct ? `${((actual - budget) * 100).toFixed(1)}pp` : fmtCurrency(variance)}
+      </span>
     </div>
   );
 }

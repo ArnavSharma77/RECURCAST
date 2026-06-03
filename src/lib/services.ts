@@ -14,11 +14,17 @@ export interface ServicePeriodData {
   revenue: number;
   cogs: number;
   grossProfit: number;
+  franchiseFee: number;
+  routeLabor: number;
+  vehicleExpense: number;
   agp: number;
   laborCost: number;
   salesCost: number;
   operatingCost: number;
   overheadCost: number;
+  totalExpense: number;
+  netIncome: number;
+  contributionMargin: number;
   customerCount: number;
 }
 
