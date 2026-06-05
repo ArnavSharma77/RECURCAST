@@ -137,6 +137,8 @@ const whatIfInputs: WhatIfInputs = {
   weeklyRamp: weeklyAvgs,
   staffCost: 5000,
   staffStart: 4,
+  staffType: "sales",
+  operationsEfficiency: 0,
   cxOverride: null,
 };
 
@@ -248,6 +250,8 @@ const salesOnlyInputs: WhatIfInputs = {
   weeklyRamp: salesOnlyRamp,
   staffCost: 0,
   staffStart: 1,
+  staffType: "sales",
+  operationsEfficiency: 0,
   cxOverride: null,
 };
 
@@ -272,6 +276,8 @@ const highCxInputs: WhatIfInputs = {
   weeklyRamp: weeklyAvgs,
   staffCost: 5000,
   staffStart: 4,
+  staffType: "sales",
+  operationsEfficiency: 0,
   cxOverride: 0.20,
 };
 

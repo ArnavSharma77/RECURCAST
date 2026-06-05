@@ -42,10 +42,14 @@ export interface PriceIncreaseInput {
   productStartPeriod: number; // period the product increase takes effect (1-indexed)
 }
 
+export type StaffType = "sales" | "office" | "operations";
+
 export interface WhatIfInputs {
   weeklyRamp: number[];     // 13 values: new sales $/wk per period
   staffCost: number;        // monthly loaded cost
   staffStart: number;       // period hire begins (1-indexed)
+  staffType: StaffType;     // type of staff being added
+  operationsEfficiency: number; // for "operations" type: % of expense reduction (0-0.20)
   cxOverride: number | null; // null = use base rate
   priceIncrease?: PriceIncreaseInput; // optional price increase scenario
 }
@@ -142,9 +146,10 @@ export function runWhatIf(
 ): WhatIfResult {
   const pc = params.periodsCompleted;
   const effCx = inputs.cxOverride ?? params.cxRate;
-  const cxDelta = effCx - params.cxRate; // positive = higher churn = less revenue
+  const cxDelta = effCx - params.cxRate;
   const rampRevenue = calcAllRampRevenue(inputs.weeklyRamp);
   const { cogsRatio, variableExpenseRatio } = deriveCostRatios(baseForecast);
+  const staffType = inputs.staffType ?? "sales";
 
   const baseIncome = baseForecast.map(p => p.totalIncome);
   const baseCOGS = baseForecast.map(p => p.totalCOGS);
@@ -162,12 +167,15 @@ export function runWhatIf(
 
   for (let i = 0; i < NUM_PERIODS; i++) {
     const pn = i + 1;
-    const extraRev = pn > pc ? rampRevenue[i] * (1 - effCx) : 0;
-    const baseSalary = (pn > pc && pn >= inputs.staffStart) ? inputs.staffCost : 0;
-    const commission = extraRev > 0 ? extraRev * params.commissionRate : 0;
+    const isActive = pn > pc && pn >= inputs.staffStart;
+
+    // Revenue generation only applies to sales staff
+    const extraRev = (staffType === "sales" && pn > pc) ? rampRevenue[i] * (1 - effCx) : 0;
+    const baseSalary = isActive ? inputs.staffCost : 0;
+    const commission = (staffType === "sales" && extraRev > 0) ? extraRev * params.commissionRate : 0;
     const staffHit = baseSalary + commission;
 
-    // CX impact on EXISTING base revenue (independent of salesperson)
+    // CX impact on EXISTING base revenue
     const cxBaseImpact = (pn > pc && cxDelta !== 0)
       ? -baseForecast[i].serviceRev * cxDelta
       : 0;
@@ -189,10 +197,15 @@ export function runWhatIf(
     const extraCOGS = totalExtraRev * cogsRatio;
     const extraVarExpense = totalExtraRev * variableExpenseRatio;
 
+    // Operations manager reduces existing expenses by efficiency %
+    const opsExpenseReduction = (staffType === "operations" && isActive)
+      ? baseExpense[i] * (inputs.operationsEfficiency ?? 0)
+      : 0;
+
     const newIncome = baseIncome[i] + totalExtraRev;
     const newCOGS = baseCOGS[i] + extraCOGS;
-    const newExpense = baseExpense[i] + extraVarExpense + staffHit;
-    const newNet = baseNetIncome[i] + totalExtraRev - extraCOGS - extraVarExpense - staffHit;
+    const newExpense = baseExpense[i] + extraVarExpense + staffHit - opsExpenseReduction;
+    const newNet = baseNetIncome[i] + totalExtraRev - extraCOGS - extraVarExpense - staffHit + opsExpenseReduction;
 
     scenarioIncome.push(newIncome);
     scenarioCOGS.push(newCOGS);
@@ -296,4 +309,124 @@ export function fmtCurrency(value: number, compact = false): string {
 
 export function fmtPct(value: number): string {
   return `${(value * 100).toFixed(1)}%`;
+}
+
+// ── Multi-Year Projection ──
+
+export interface MultiYearAssumptions {
+  annualRevenueGrowth: number;  // e.g. 0.10 = 10% growth
+  annualExpenseGrowth: number;  // e.g. 0.05 = 5% expense growth
+  addStaffYear2: boolean;
+  staffCostY2: number;
+  staffStartY2: number;        // period within Y2 (1-13)
+  weeklyRampY2: number;
+  addStaffYear3: boolean;
+  staffCostY3: number;
+  staffStartY3: number;
+  weeklyRampY3: number;
+  priceIncreaseY2: number;     // e.g. 0.05 = 5%
+  priceIncreaseY3: number;
+}
+
+export interface MultiYearResult {
+  years: {
+    year: number;
+    periods: Array<{
+      period: number;
+      revenue: number;
+      cogs: number;
+      expense: number;
+      netIncome: number;
+    }>;
+    totalRevenue: number;
+    totalNetIncome: number;
+    netMargin: number;
+  }[];
+}
+
+export function projectMultiYear(
+  baseForecast: PeriodData[],
+  whatIfResult: WhatIfResult,
+  params: ClientParameters,
+  assumptions: MultiYearAssumptions
+): MultiYearResult {
+  const { cogsRatio, variableExpenseRatio } = deriveCostRatios(baseForecast);
+  const years: MultiYearResult["years"] = [];
+
+  // Year 1: use scenario result
+  const y1Periods = whatIfResult.scenarioIncome.map((rev, i) => ({
+    period: i + 1,
+    revenue: rev,
+    cogs: whatIfResult.scenarioCOGS[i],
+    expense: whatIfResult.scenarioExpense[i],
+    netIncome: whatIfResult.scenarioNetIncome[i],
+  }));
+  years.push({
+    year: 1,
+    periods: y1Periods,
+    totalRevenue: y1Periods.reduce((s, p) => s + p.revenue, 0),
+    totalNetIncome: y1Periods.reduce((s, p) => s + p.netIncome, 0),
+    netMargin: 0,
+  });
+  years[0].netMargin = years[0].totalRevenue > 0
+    ? years[0].totalNetIncome / years[0].totalRevenue
+    : 0;
+
+  // Year 2 and 3: project forward from P13 ending state
+  for (let yr = 2; yr <= 3; yr++) {
+    const prevYear = years[yr - 2];
+    const lastPeriod = prevYear.periods[NUM_PERIODS - 1];
+    const growthFactor = 1 + assumptions.annualRevenueGrowth;
+    const expGrowthFactor = 1 + assumptions.annualExpenseGrowth;
+
+    const isY2 = yr === 2;
+    const addStaff = isY2 ? assumptions.addStaffYear2 : assumptions.addStaffYear3;
+    const sCost = isY2 ? assumptions.staffCostY2 : assumptions.staffCostY3;
+    const sStart = isY2 ? assumptions.staffStartY2 : assumptions.staffStartY3;
+    const weeklyRamp = isY2 ? assumptions.weeklyRampY2 : assumptions.weeklyRampY3;
+    const priceInc = isY2 ? assumptions.priceIncreaseY2 : assumptions.priceIncreaseY3;
+
+    const baseRevForYear = lastPeriod.revenue * growthFactor;
+    const baseExpForYear = lastPeriod.expense * expGrowthFactor;
+    const baseCOGSForYear = lastPeriod.cogs * growthFactor;
+
+    const periods: MultiYearResult["years"][0]["periods"] = [];
+    for (let i = 0; i < NUM_PERIODS; i++) {
+      const pn = i + 1;
+      // Gradual ramp within the year
+      const periodGrowth = 1 + (assumptions.annualRevenueGrowth * (pn / NUM_PERIODS));
+      let rev = baseRevForYear * (1 + (pn - 1) * 0.005); // slight monthly growth
+      let exp = baseExpForYear * (1 + (pn - 1) * 0.002);
+      let cogs = baseCOGSForYear * (1 + (pn - 1) * 0.005);
+
+      // Apply price increase
+      if (priceInc > 0) {
+        rev *= (1 + priceInc);
+      }
+
+      // Apply staff addition
+      if (addStaff && pn >= sStart) {
+        const rampRev = weeklyRamp * 12 + weeklyRamp * 16 * Math.min(pn - sStart, pn - 1);
+        const netRampRev = rampRev * (1 - params.cxRate);
+        rev += netRampRev;
+        cogs += netRampRev * cogsRatio;
+        exp += sCost + netRampRev * variableExpenseRatio;
+      }
+
+      const netIncome = rev - cogs - exp;
+      periods.push({ period: pn, revenue: rev, cogs, expense: exp, netIncome });
+    }
+
+    const totalRevenue = periods.reduce((s, p) => s + p.revenue, 0);
+    const totalNetIncome = periods.reduce((s, p) => s + p.netIncome, 0);
+    years.push({
+      year: yr,
+      periods,
+      totalRevenue,
+      totalNetIncome,
+      netMargin: totalRevenue > 0 ? totalNetIncome / totalRevenue : 0,
+    });
+  }
+
+  return { years };
 }

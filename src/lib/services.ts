@@ -1,10 +1,11 @@
-export type ServiceName = "windows" | "refresh" | "sani" | "scrub" | "oneoffs";
+export type ServiceName = "windows" | "refresh" | "sani" | "scrub" | "nonrestroom" | "oneoffs";
 
 export const SERVICES: { key: ServiceName; label: string; color: string; icon: string }[] = [
-  { key: "windows", label: "Windows", color: "#1E3A8A", icon: "W" },
-  { key: "refresh", label: "Refresh", color: "#4338CA", icon: "R" },
   { key: "sani", label: "Sani", color: "#B8860B", icon: "S" },
   { key: "scrub", label: "Scrub", color: "#065F46", icon: "B" },
+  { key: "windows", label: "Windows (RPM)", color: "#1E3A8A", icon: "W" },
+  { key: "refresh", label: "Refresh", color: "#4338CA", icon: "R" },
+  { key: "nonrestroom", label: "Non-Restroom/Janitorial", color: "#0891B2", icon: "N" },
   { key: "oneoffs", label: "One-Offs", color: "#7C3AED", icon: "O" },
 ];
 

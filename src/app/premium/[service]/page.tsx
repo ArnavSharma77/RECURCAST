@@ -5,11 +5,11 @@ import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { Nav } from "@/components/nav";
 import { fmtCurrency, fmtPct } from "@/lib/model";
-import { SERVICES, type ServiceName, getServiceLabel, getServiceColor } from "@/lib/services";
-import { getDemoServiceData, getRollingServiceForecast, type ServicePeriodData } from "@/lib/service-demo-data";
+import { SERVICES, type ServiceName, type ServicePeriodData, getServiceLabel, getServiceColor } from "@/lib/services";
+import { getClientServiceData, getRollingServiceForecast } from "@/lib/service-data";
 import { supabase } from "@/lib/supabase/client";
 import type { ClientRow } from "@/lib/supabase/types";
-import { ArrowLeft, Loader2 } from "lucide-react";
+import { ArrowLeft, Loader2, DatabaseZap, TrendingUp } from "lucide-react";
 import {
   ComposedChart, Bar, Line, XAxis, YAxis, CartesianGrid,
   Tooltip, Legend, ResponsiveContainer, BarChart, PieChart, Pie, Cell,
@@ -56,6 +56,7 @@ export default function ServiceDeepDive() {
   const [budget, setBudget] = useState<ServicePeriodData[]>([]);
   const [actuals, setActuals] = useState<ServicePeriodData[]>([]);
   const [forecast, setForecast] = useState<ServicePeriodData[]>([]);
+  const [noData, setNoData] = useState(false);
 
   const valid = SERVICES.some(s => s.key === serviceKey);
 
@@ -82,7 +83,13 @@ export default function ServiceDeepDive() {
         }
       } catch {}
 
-      const allData = getDemoServiceData(pc);
+      const allData = await getClientServiceData(clientId);
+      if (!allData || !allData[serviceKey]) {
+        setNoData(true);
+        setLoading(false);
+        return;
+      }
+
       const svcData = allData[serviceKey];
       setBudget(svcData.budget);
       setActuals(svcData.actuals);
@@ -102,6 +109,26 @@ export default function ServiceDeepDive() {
     );
   }
 
+  if (noData) {
+    return (
+      <div className="page-ambient min-h-screen text-slate-900">
+        <Nav />
+        <div className="max-w-2xl mx-auto px-4 pt-24 text-center">
+          <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-slate-100 mx-auto mb-5">
+            <DatabaseZap className="h-7 w-7 text-slate-400" />
+          </div>
+          <h2 className="text-xl font-semibold text-slate-900 mb-2">Service Data Not Yet Loaded</h2>
+          <p className="text-sm text-slate-500 max-w-md mx-auto mb-6">
+            No data available for this service. Your administrator will load financial data during onboarding.
+          </p>
+          <Link href="/premium" className="text-sm text-indigo-700 font-medium hover:underline">
+            &larr; Back to Premium Analytics
+          </Link>
+        </div>
+      </div>
+    );
+  }
+
   const rolling = getRollingServiceForecast(actuals, forecast, periodsCompleted);
   const color = getServiceColor(serviceKey);
   const label = getServiceLabel(serviceKey);
@@ -112,44 +139,42 @@ export default function ServiceDeepDive() {
   const ytdRev = ytdActuals.reduce((s, p) => s + p.revenue, 0);
   const ytdBudgetRev = ytdBudget.reduce((s, p) => s + p.revenue, 0);
   const ytdRevVar = ytdRev - ytdBudgetRev;
-  const ytdAGP = ytdActuals.reduce((s, p) => s + p.agp, 0);
-  const ytdBudgetAGP = ytdBudget.reduce((s, p) => s + p.agp, 0);
-  const ytdAGPVar = ytdAGP - ytdBudgetAGP;
   const ytdLabor = ytdActuals.reduce((s, p) => s + p.laborCost, 0);
   const ytdCOGS = ytdActuals.reduce((s, p) => s + p.cogs, 0);
   const ytdNetIncome = ytdActuals.reduce((s, p) => s + p.netIncome, 0);
   const ytdBudgetNI = ytdBudget.reduce((s, p) => s + p.netIncome, 0);
-  const agpPct = ytdRev > 0 ? ytdAGP / ytdRev : 0;
-  const laborPct = ytdRev > 0 ? ytdLabor / ytdRev : 0;
   const netMargin = ytdRev > 0 ? ytdNetIncome / ytdRev : 0;
 
   // P&L summary for YTD
   const ytdFranchiseFee = ytdActuals.reduce((s, p) => s + p.franchiseFee, 0);
   const ytdRouteLabor = ytdActuals.reduce((s, p) => s + p.routeLabor, 0);
   const ytdVehicle = ytdActuals.reduce((s, p) => s + p.vehicleExpense, 0);
-  const ytdSales = ytdActuals.reduce((s, p) => s + p.salesCost, 0);
-  const ytdOpex = ytdActuals.reduce((s, p) => s + p.operatingCost, 0);
-  const ytdOverhead = ytdActuals.reduce((s, p) => s + p.overheadCost, 0);
   const ytdGP = ytdActuals.reduce((s, p) => s + p.grossProfit, 0);
+
+  // Net margin % by period (actual vs budget)
+  // Forecast line: only shows for periods after actuals end (diverges from actual)
+  const netMarginPctChartData = rolling.map((p, i) => ({
+    period: `P${i + 1}`,
+    actual: i < periodsCompleted && p.revenue > 0 ? (p.netIncome / p.revenue) * 100 : null,
+    budget: budget[i] && budget[i].revenue > 0 ? (budget[i].netIncome / budget[i].revenue) * 100 : 0,
+    forecast: i >= periodsCompleted && forecast[i] && forecast[i].revenue > 0
+      ? (forecast[i].netIncome / forecast[i].revenue) * 100
+      : (i === periodsCompleted - 1 && actuals[i] && actuals[i].revenue > 0)
+        ? (actuals[i].netIncome / actuals[i].revenue) * 100
+        : null,
+  }));
 
   const revenueChartData = rolling.map((p, i) => ({
     period: `P${i + 1}`,
     actual: i < periodsCompleted ? p.revenue : null,
     budget: budget[i]?.revenue ?? 0,
-    forecast: p.revenue,
-  }));
-
-  const agpChartData = rolling.map((p, i) => ({
-    period: `P${i + 1}`,
-    actual: i < periodsCompleted ? p.agp : null,
-    budget: budget[i]?.agp ?? 0,
-    forecast: p.agp,
+    forecast: i >= periodsCompleted - 1 ? (i < periodsCompleted ? p.revenue : (forecast[i]?.revenue ?? 0)) : null,
   }));
 
   const laborChartData = rolling.map((p, i) => ({
     period: `P${i + 1}`,
     actual: i < periodsCompleted ? p.laborCost : null,
-    forecast: forecast[i]?.laborCost ?? 0,
+    forecast: i >= periodsCompleted - 1 ? (i < periodsCompleted ? p.laborCost : (forecast[i]?.laborCost ?? 0)) : null,
     pctOfRev: p.revenue > 0 ? (p.laborCost / p.revenue) * 100 : 0,
   }));
 
@@ -164,7 +189,7 @@ export default function ServiceDeepDive() {
     period: `P${i + 1}`,
     actual: i < periodsCompleted ? p.netIncome : null,
     budget: budget[i]?.netIncome ?? 0,
-    forecast: p.netIncome,
+    forecast: i >= periodsCompleted - 1 ? (i < periodsCompleted ? p.netIncome : (forecast[i]?.netIncome ?? 0)) : null,
   }));
 
   // Cost allocation pie chart
@@ -173,9 +198,6 @@ export default function ServiceDeepDive() {
     { name: "Franchise Fee", value: ytdFranchiseFee, color: PALETTE.franchiseFee },
     { name: "Route Labor", value: ytdRouteLabor, color: PALETTE.routeLabor },
     { name: "Vehicle", value: ytdVehicle, color: PALETTE.vehicle },
-    { name: "Sales", value: ytdSales, color: PALETTE.sales },
-    { name: "Operating", value: ytdOpex, color: PALETTE.opex },
-    { name: "Overhead", value: ytdOverhead, color: PALETTE.overhead },
   ].filter(d => d.value > 0);
 
   const tooltipStyle = {
@@ -213,15 +235,20 @@ export default function ServiceDeepDive() {
               {clientName} &middot; {periodsCompleted} periods completed
             </p>
           </div>
+          <Link
+            href={`/premium/${serviceKey}/whatif`}
+            className="flex items-center gap-1.5 px-3 py-2 rounded-lg border border-indigo-200 bg-indigo-50 hover:bg-indigo-100 text-xs text-indigo-900 font-medium transition-colors"
+          >
+            <TrendingUp className="w-3.5 h-3.5" />
+            What-If
+          </Link>
         </div>
       </div>
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 py-5 space-y-5">
         {/* KPI row */}
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+        <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-4 gap-3">
           <KpiMini label="YTD Revenue" value={fmtCurrency(ytdRev)} sub={`Var: ${fmtCurrency(ytdRevVar)}`} positive={ytdRevVar >= 0} />
-          <KpiMini label="AGP" value={fmtCurrency(ytdAGP)} sub={`Var: ${fmtCurrency(ytdAGPVar)}`} positive={ytdAGPVar >= 0} />
-          <KpiMini label="AGP Margin" value={fmtPct(agpPct)} />
           <KpiMini label="Net Income" value={fmtCurrency(ytdNetIncome)} sub={`Var: ${fmtCurrency(ytdNetIncome - ytdBudgetNI)}`} positive={ytdNetIncome >= ytdBudgetNI} />
           <KpiMini label="Net Margin" value={fmtPct(netMargin)} sub={netMargin >= 0 ? "Profitable" : "Loss"} positive={netMargin >= 0} />
           <KpiMini label="YTD COGS" value={fmtCurrency(ytdCOGS)} sub={`${ytdRev > 0 ? ((ytdCOGS / ytdRev) * 100).toFixed(1) : 0}% of rev`} />
@@ -245,24 +272,38 @@ export default function ServiceDeepDive() {
             <PLRow label="Gross Profit" actual={ytdGP} budget={ytdBudget.reduce((s, p) => s + p.grossProfit, 0)} bold indent={0} border />
 
             <div className="pt-2">
-              <p className="text-[10px] text-slate-400 uppercase tracking-[0.14em] font-semibold mb-1 pl-1">AGP Deductions</p>
+              <p className="text-[10px] text-slate-400 uppercase tracking-[0.14em] font-semibold mb-1 pl-1">Cost Deductions</p>
             </div>
             <PLRow label="Franchise Fee (13%)" actual={ytdFranchiseFee} budget={ytdBudget.reduce((s, p) => s + p.franchiseFee, 0)} indent={1} negative />
             <PLRow label="Route/Tech Labor" actual={ytdRouteLabor} budget={ytdBudget.reduce((s, p) => s + p.routeLabor, 0)} indent={1} negative />
             <PLRow label="Vehicle Expense" actual={ytdVehicle} budget={ytdBudget.reduce((s, p) => s + p.vehicleExpense, 0)} indent={1} negative />
-            <PLRow label="Adjusted Gross Profit" actual={ytdAGP} budget={ytdBudgetAGP} bold indent={0} border accent />
-
-            <div className="pt-2">
-              <p className="text-[10px] text-slate-400 uppercase tracking-[0.14em] font-semibold mb-1 pl-1">Operating Expenses</p>
-            </div>
-            <PLRow label="Sales Expense" actual={ytdSales} budget={ytdBudget.reduce((s, p) => s + p.salesCost, 0)} indent={1} negative />
-            <PLRow label="Operating Expense" actual={ytdOpex} budget={ytdBudget.reduce((s, p) => s + p.operatingCost, 0)} indent={1} negative />
-            <PLRow label="Overhead" actual={ytdOverhead} budget={ytdBudget.reduce((s, p) => s + p.overheadCost, 0)} indent={1} negative />
 
             <PLRow label="Net Income" actual={ytdNetIncome} budget={ytdBudgetNI} bold indent={0} border accent />
             <PLRow label="Net Margin" actual={netMargin} budget={ytdBudgetRev > 0 ? ytdBudgetNI / ytdBudgetRev : 0} indent={0} pct />
           </div>
+          <p className="text-[10px] text-slate-400 mt-3 pt-2 border-t border-slate-100">
+            Net Income = Revenue minus service-level costs above. Sales, operating, and overhead are company-wide (see Premium overview).
+          </p>
         </div>
+
+        {/* Costs Included Note */}
+        <CostsIncludedNote serviceKey={serviceKey} />
+
+        {/* Net Margin % by Period */}
+        <ChartPanel title="Net Margin % by Period" subtitle="Actual vs Budget net income as % of revenue with rolling forecast">
+          <ResponsiveContainer width="100%" height={260}>
+            <ComposedChart data={netMarginPctChartData}>
+              <CartesianGrid strokeDasharray="3 3" stroke={CHART_GRID} />
+              <XAxis dataKey="period" tick={{ fill: CHART_AXIS_TICK, fontSize: 11 }} axisLine={{ stroke: CHART_AXIS_LINE }} />
+              <YAxis tick={{ fill: CHART_AXIS_TICK, fontSize: 11 }} tickFormatter={(v: number) => `${v.toFixed(0)}%`} axisLine={{ stroke: CHART_AXIS_LINE }} />
+              <Tooltip {...tooltipStyle} formatter={(v) => `${Number(v).toFixed(1)}%`} />
+              <Legend wrapperStyle={{ fontSize: 11, color: "#64748B", paddingTop: 8 }} />
+              <Bar dataKey="budget" fill={PALETTE.budget} name="Budget Net Margin %" radius={[4, 4, 0, 0]} />
+              <Bar dataKey="actual" fill={PALETTE.agpActual} name="Actual Net Margin %" radius={[4, 4, 0, 0]} />
+              <Line type="monotone" dataKey="forecast" stroke={PALETTE.forecast} strokeWidth={2} dot={{ r: 2.5, fill: PALETTE.forecast }} name="Forecast Net Margin %" strokeDasharray="5 5" />
+            </ComposedChart>
+          </ResponsiveContainer>
+        </ChartPanel>
 
         {/* Cost Allocation Pie + Revenue Chart side by side */}
         <div className="grid lg:grid-cols-5 gap-5">
@@ -332,21 +373,6 @@ export default function ServiceDeepDive() {
           </ResponsiveContainer>
         </ChartPanel>
 
-        <ChartPanel title="AGP: Actual vs Budget vs Forecast" subtitle="Adjusted Gross Profit (GP - Franchise Fee - Route Labor - Vehicle)">
-          <ResponsiveContainer width="100%" height={260}>
-            <ComposedChart data={agpChartData}>
-              <CartesianGrid strokeDasharray="3 3" stroke={CHART_GRID} />
-              <XAxis dataKey="period" tick={{ fill: CHART_AXIS_TICK, fontSize: 11 }} axisLine={{ stroke: CHART_AXIS_LINE }} />
-              <YAxis tick={{ fill: CHART_AXIS_TICK, fontSize: 11 }} tickFormatter={(v: number) => fmtCurrency(v, true)} axisLine={{ stroke: CHART_AXIS_LINE }} />
-              <Tooltip {...tooltipStyle} formatter={(v) => fmtCurrency(Number(v))} />
-              <Legend wrapperStyle={{ fontSize: 11, color: "#64748B", paddingTop: 8 }} />
-              <Bar dataKey="budget" fill={PALETTE.budget} name="Budget" radius={[4, 4, 0, 0]} />
-              <Bar dataKey="actual" fill={PALETTE.agpActual} name="Actual" radius={[4, 4, 0, 0]} />
-              <Line type="monotone" dataKey="forecast" stroke={PALETTE.forecast} strokeWidth={2} dot={{ r: 2.5, fill: PALETTE.forecast }} name="Forecast" strokeDasharray="5 5" />
-            </ComposedChart>
-          </ResponsiveContainer>
-        </ChartPanel>
-
         <div className="grid lg:grid-cols-2 gap-5">
           <ChartPanel title="Labor Cost: Actual vs Forecast" subtitle="With % of revenue trend">
             <ResponsiveContainer width="100%" height={240}>
@@ -395,10 +421,6 @@ export default function ServiceDeepDive() {
                 <th className="py-2.5 px-2 text-right font-medium">Franch. Fee</th>
                 <th className="py-2.5 px-2 text-right font-medium">Route Labor</th>
                 <th className="py-2.5 px-2 text-right font-medium">Vehicle</th>
-                <th className="py-2.5 px-2 text-right font-medium">AGP</th>
-                <th className="py-2.5 px-2 text-right font-medium">Sales</th>
-                <th className="py-2.5 px-2 text-right font-medium">Opex</th>
-                <th className="py-2.5 px-2 text-right font-medium">Overhead</th>
                 <th className="py-2.5 px-2 text-right font-medium">Net Income</th>
                 <th className="py-2.5 px-2 text-right font-medium">Margin</th>
               </tr>
@@ -420,10 +442,6 @@ export default function ServiceDeepDive() {
                     <td className="py-2 px-2 text-right text-purple-700 tabular-nums">{fmtCurrency(p.franchiseFee)}</td>
                     <td className="py-2 px-2 text-right text-red-700 tabular-nums">{fmtCurrency(p.routeLabor)}</td>
                     <td className="py-2 px-2 text-right text-orange-700 tabular-nums">{fmtCurrency(p.vehicleExpense)}</td>
-                    <td className="py-2 px-2 text-right text-emerald-800 tabular-nums font-medium">{fmtCurrency(p.agp)}</td>
-                    <td className="py-2 px-2 text-right text-slate-500 tabular-nums">{fmtCurrency(p.salesCost)}</td>
-                    <td className="py-2 px-2 text-right text-slate-500 tabular-nums">{fmtCurrency(p.operatingCost)}</td>
-                    <td className="py-2 px-2 text-right text-slate-500 tabular-nums">{fmtCurrency(p.overheadCost)}</td>
                     <td className={`py-2 px-2 text-right tabular-nums font-medium ${p.netIncome >= 0 ? "text-emerald-700" : "text-red-600"}`}>
                       {fmtCurrency(p.netIncome)}
                     </td>
@@ -479,6 +497,52 @@ function KpiMini({ label, value, sub, positive }: { label: string; value: string
           {sub}
         </p>
       )}
+    </div>
+  );
+}
+
+const COST_NOTES: Record<string, { costs: string[]; formula: string }> = {
+  sani: {
+    costs: ["COGS (3%)", "Franchise Fee (13%)", "Route/Tech Labor", "Sani Fuel (10% of labor)"],
+    formula: "Net Income = Revenue - COGS - Franchise Fee - Route Labor - Sani Fuel",
+  },
+  windows: {
+    costs: ["COGS (2%)", "Franchise Fee (13%)", "Route/Tech Labor (30%)", "Auto Fuel (3% of revenue)"],
+    formula: "Net Income = Revenue - COGS - Franchise Fee - Route Labor - Auto Fuel",
+  },
+  refresh: {
+    costs: ["COGS (5%)", "Franchise Fee (13%)", "Route/Tech Labor (20%)"],
+    formula: "Net Income = Revenue - COGS - Franchise Fee - Route Labor",
+  },
+  scrub: {
+    costs: ["COGS (1%)", "Franchise Fee (13%)", "Auto Fuel/Repairs", "Route/Tech Labor (23%)"],
+    formula: "Net Income = Revenue - COGS - Franchise Fee - Labor - Vehicle",
+  },
+  nonrestroom: {
+    costs: ["COGS (5%)", "Franchise Fee (13%)", "Route/Tech Labor (35%)", "Vehicle (10% of revenue)"],
+    formula: "Net Income = Revenue - COGS - Franchise Fee - Route Labor - Vehicle",
+  },
+  oneoffs: {
+    costs: ["Labor (20%)"],
+    formula: "Net Income = Revenue - Labor",
+  },
+};
+
+function CostsIncludedNote({ serviceKey }: { serviceKey: ServiceName }) {
+  const note = COST_NOTES[serviceKey];
+  if (!note) return null;
+
+  return (
+    <div className="spotlight-card p-4 sm:p-5 border-l-[3px] border-l-indigo-400">
+      <h4 className="text-xs font-semibold text-slate-700 mb-2">Net Income Definition — {getServiceLabel(serviceKey)}</h4>
+      <div className="flex flex-wrap gap-2 mb-2.5">
+        {note.costs.map((cost) => (
+          <span key={cost} className="text-[10px] px-2.5 py-1 rounded-full bg-slate-100 text-slate-600 font-medium">
+            {cost}
+          </span>
+        ))}
+      </div>
+      <p className="text-[10px] text-slate-400 font-mono">{note.formula}</p>
     </div>
   );
 }

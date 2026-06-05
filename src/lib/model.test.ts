@@ -42,6 +42,8 @@ const inputs: WhatIfInputs = {
   weeklyRamp: Array.from({ length: 13 }, (_, i) => i >= 3 ? 200 : 0),
   staffCost: 5000,
   staffStart: 4,
+  staffType: "sales",
+  operationsEfficiency: 0,
   cxOverride: null,
 };
 
@@ -65,6 +67,8 @@ const zeroInputs: WhatIfInputs = {
   weeklyRamp: Array(13).fill(0),
   staffCost: 5000,
   staffStart: 4,
+  staffType: "sales",
+  operationsEfficiency: 0,
   cxOverride: null,
 };
 const zeroResult = runWhatIf(forecast, zeroInputs, DEMO_PARAMS);
@@ -78,6 +82,8 @@ const highInputs: WhatIfInputs = {
   weeklyRamp: Array.from({ length: 13 }, (_, i) => i >= 3 ? 500 : 0),
   staffCost: 3000,
   staffStart: 4,
+  staffType: "sales",
+  operationsEfficiency: 0,
   cxOverride: null,
 };
 const highResult = runWhatIf(forecast, highInputs, DEMO_PARAMS);

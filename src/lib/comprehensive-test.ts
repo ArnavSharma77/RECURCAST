@@ -58,7 +58,7 @@ console.log(`  AGP%: ${(agpPct*100).toFixed(1)}%`);
 
 const warrenInputs: WhatIfInputs = {
   weeklyRamp: Array.from({ length: 13 }, (_, i) => i >= 3 ? 200 : 0),
-  staffCost: 5000, staffStart: 4, cxOverride: null,
+  staffCost: 5000, staffStart: 4, staffType: "sales", operationsEfficiency: 0, cxOverride: null,
 };
 const w = runWhatIf(forecast, warrenInputs, DEMO_PARAMS);
 const wp = calcPayback(w, agpPct, 5000, 4, DEMO_PARAMS.periodsCompleted);
@@ -83,7 +83,7 @@ section("SCENARIO 4: Boost Sales $100/wk (no hire)");
 
 const boostInputs: WhatIfInputs = {
   weeklyRamp: Array.from({ length: 13 }, () => 100),
-  staffCost: 0, staffStart: 1, cxOverride: null,
+  staffCost: 0, staffStart: 1, staffType: "sales", operationsEfficiency: 0, cxOverride: null,
 };
 const b = runWhatIf(forecast, boostInputs, DEMO_PARAMS);
 const bp = calcPayback(b, agpPct, 0, 1, DEMO_PARAMS.periodsCompleted);
@@ -101,7 +101,7 @@ section("SCENARIO 5: High Cancellation Rate (20%)");
 
 const highCx: WhatIfInputs = {
   weeklyRamp: Array.from({ length: 13 }, (_, i) => i >= 3 ? 200 : 0),
-  staffCost: 5000, staffStart: 4, cxOverride: 0.20,
+  staffCost: 5000, staffStart: 4, staffType: "sales", operationsEfficiency: 0, cxOverride: 0.20,
 };
 const hc = runWhatIf(forecast, highCx, DEMO_PARAMS);
 const hcp = calcPayback(hc, agpPct, 5000, 4, DEMO_PARAMS.periodsCompleted);
@@ -120,7 +120,7 @@ section("SCENARIO 6: Aggressive Hire ($8K, P4, $400/wk)");
 
 const aggInputs: WhatIfInputs = {
   weeklyRamp: Array.from({ length: 13 }, (_, i) => i >= 3 ? 400 : 0),
-  staffCost: 8000, staffStart: 4, cxOverride: null,
+  staffCost: 8000, staffStart: 4, staffType: "sales", operationsEfficiency: 0, cxOverride: null,
 };
 const a = runWhatIf(forecast, aggInputs, DEMO_PARAMS);
 const ap = calcPayback(a, agpPct, 8000, 4, DEMO_PARAMS.periodsCompleted);
@@ -141,7 +141,7 @@ console.log(`  ROI: ${fmtPct(roi)}`);
 section("SCENARIO 7: Edge Cases");
 
 // Zero everything
-const zeroInputs: WhatIfInputs = { weeklyRamp: Array(13).fill(0), staffCost: 0, staffStart: 1, cxOverride: null };
+const zeroInputs: WhatIfInputs = { weeklyRamp: Array(13).fill(0), staffCost: 0, staffStart: 1, staffType: "sales", operationsEfficiency: 0, cxOverride: null };
 const z = runWhatIf(forecast, zeroInputs, DEMO_PARAMS);
 const zTotal = z.incomeDiff.reduce((s, v) => s + v, 0);
 assert(zTotal === 0, "Zero inputs → zero impact");
@@ -149,7 +149,7 @@ assert(zTotal === 0, "Zero inputs → zero impact");
 // Max ramp
 const maxInputs: WhatIfInputs = {
   weeklyRamp: Array.from({ length: 13 }, (_, i) => i >= 3 ? 1000 : 0),
-  staffCost: 3000, staffStart: 4, cxOverride: null,
+  staffCost: 3000, staffStart: 4, staffType: "sales", operationsEfficiency: 0, cxOverride: null,
 };
 const m = runWhatIf(forecast, maxInputs, DEMO_PARAMS);
 const mp = calcPayback(m, agpPct, 3000, 4, DEMO_PARAMS.periodsCompleted);
@@ -158,7 +158,7 @@ assert(mp.breakevenPeriod !== null && mp.breakevenPeriod <= 7, `Max ramp breakev
 // Staff start P1 (immediate hire)
 const earlyHire: WhatIfInputs = {
   weeklyRamp: Array(13).fill(200),
-  staffCost: 5000, staffStart: 1, cxOverride: null,
+  staffCost: 5000, staffStart: 1, staffType: "sales", operationsEfficiency: 0, cxOverride: null,
 };
 const eh = runWhatIf(forecast, earlyHire, DEMO_PARAMS);
 const ehp = calcPayback(eh, agpPct, 5000, 1, DEMO_PARAMS.periodsCompleted);
@@ -168,7 +168,7 @@ assert(ehp.cumCost[12] === 5000 * 10, "Only 10 forecast periods incur cost");
 // CX = 0% (no cancellations)
 const zeroCx: WhatIfInputs = {
   weeklyRamp: Array.from({ length: 13 }, (_, i) => i >= 3 ? 200 : 0),
-  staffCost: 5000, staffStart: 4, cxOverride: 0,
+  staffCost: 5000, staffStart: 4, staffType: "sales", operationsEfficiency: 0, cxOverride: 0,
 };
 const zc = runWhatIf(forecast, zeroCx, DEMO_PARAMS);
 const zcTotal = zc.incomeDiff.reduce((s, v) => s + v, 0);
@@ -205,7 +205,7 @@ section("SCENARIO 10: Warren's Real Ramp (gradual increase)");
 
 const warrenRamp: WhatIfInputs = {
   weeklyRamp: [0, 0, 0, 100, 125, 150, 150, 150, 150, 150, 150, 150, 150],
-  staffCost: 5500, staffStart: 4, cxOverride: null,
+  staffCost: 5500, staffStart: 4, staffType: "sales", operationsEfficiency: 0, cxOverride: null,
 };
 const wr = runWhatIf(forecast, warrenRamp, DEMO_PARAMS);
 const wrp = calcPayback(wr, agpPct, 5500, 4, DEMO_PARAMS.periodsCompleted);

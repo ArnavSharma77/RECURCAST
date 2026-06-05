@@ -30,7 +30,7 @@ assert(ratios.variableExpenseRatio > 0.15 && ratios.variableExpenseRatio < 0.30,
 section("SCENARIO A: Add Salesperson - Cost Auto-Scaling");
 const inputs: WhatIfInputs = {
   weeklyRamp: Array.from({ length: 13 }, (_, i) => i >= 3 ? 200 : 0),
-  staffCost: 5000, staffStart: 4, cxOverride: null,
+  staffCost: 5000, staffStart: 4, staffType: "sales", operationsEfficiency: 0, cxOverride: null,
 };
 const result = runWhatIf(forecast, inputs, DEMO_PARAMS);
 
@@ -60,7 +60,7 @@ for (let i = 0; i < NUM_PERIODS; i++) {
 section("SCENARIO B: Boost Sales Only - Cost Scaling Without Staff");
 const boostInputs: WhatIfInputs = {
   weeklyRamp: Array(13).fill(100),
-  staffCost: 0, staffStart: 1, cxOverride: null,
+  staffCost: 0, staffStart: 1, staffType: "sales", operationsEfficiency: 0, cxOverride: null,
 };
 const br = runWhatIf(forecast, boostInputs, DEMO_PARAMS);
 const brRevDiff = br.incomeDiff.reduce((s, v) => s + v, 0);
@@ -76,7 +76,7 @@ assert(brNetDiff < brRevDiff, "Net < Revenue (COGS + variable expenses deducted)
 assert(brNetDiff > brRevDiff * 0.30, "Net > 30% of revenue (costs are reasonable)");
 
 section("SCENARIO C: Zero Input - No Cost Change");
-const zeroInputs: WhatIfInputs = { weeklyRamp: Array(13).fill(0), staffCost: 0, staffStart: 1, cxOverride: null };
+const zeroInputs: WhatIfInputs = { weeklyRamp: Array(13).fill(0), staffCost: 0, staffStart: 1, staffType: "sales", operationsEfficiency: 0, cxOverride: null };
 const zr = runWhatIf(forecast, zeroInputs, DEMO_PARAMS);
 assert(zr.cogsDiff.every(v => v === 0), "Zero ramp → zero COGS diff");
 assert(zr.expenseDiff.every(v => v === 0), "Zero ramp → zero expense diff");

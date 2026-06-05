@@ -1,11 +1,15 @@
-﻿"use client";
+"use client";
 
 import { NUM_PERIODS } from "@/lib/model";
+import type { StaffType } from "@/lib/model";
+import { UserPlus, Briefcase, Settings2 } from "lucide-react";
 
 interface WhatIfSlidersProps {
   weeklyRamp: number[];
   staffCost: number;
   staffStart: number;
+  staffType: StaffType;
+  operationsEfficiency: number;
   cxOverride: number | null;
   useSameRamp: boolean;
   sameRampValue: number;
@@ -17,6 +21,8 @@ interface WhatIfSlidersProps {
   onWeeklyRampChange: (ramp: number[]) => void;
   onStaffCostChange: (v: number) => void;
   onStaffStartChange: (v: number) => void;
+  onStaffTypeChange: (v: StaffType) => void;
+  onOperationsEfficiencyChange: (v: number) => void;
   onCxOverrideChange: (v: number | null) => void;
   onUseSameRampChange: (v: boolean) => void;
   onSameRampValueChange: (v: number) => void;
@@ -54,12 +60,19 @@ function SliderField({
   );
 }
 
+const STAFF_TYPES: { value: StaffType; label: string; desc: string; icon: React.ReactNode }[] = [
+  { value: "sales", label: "Salesperson", desc: "Generates revenue via new sales", icon: <UserPlus className="w-3.5 h-3.5" /> },
+  { value: "office", label: "Office / Admin", desc: "Fixed cost, no direct revenue", icon: <Briefcase className="w-3.5 h-3.5" /> },
+  { value: "operations", label: "Operations Mgr", desc: "Reduces operating expenses", icon: <Settings2 className="w-3.5 h-3.5" /> },
+];
+
 export function WhatIfSliders(props: WhatIfSlidersProps) {
   const {
-    weeklyRamp, staffCost, staffStart, cxOverride,
-    useSameRamp, sameRampValue, commissionPct,
+    weeklyRamp, staffCost, staffStart, staffType, operationsEfficiency,
+    cxOverride, useSameRamp, sameRampValue, commissionPct,
     servicePricePct, servicePriceStart, productPricePct, productPriceStart,
     onWeeklyRampChange, onStaffCostChange, onStaffStartChange,
+    onStaffTypeChange, onOperationsEfficiencyChange,
     onCxOverrideChange, onUseSameRampChange, onSameRampValueChange,
     onCommissionPctChange,
     onServicePricePctChange, onServicePriceStartChange,
@@ -87,19 +100,49 @@ export function WhatIfSliders(props: WhatIfSlidersProps) {
         Scenario Controls
       </h3>
 
+      {/* Staff Type Selector */}
+      <div className="space-y-2">
+        <span className="text-[10px] font-semibold text-slate-500 uppercase tracking-[0.12em]">Staff Type</span>
+        <div className="grid grid-cols-1 gap-2">
+          {STAFF_TYPES.map(st => (
+            <button
+              key={st.value}
+              onClick={() => onStaffTypeChange(st.value)}
+              className={`flex items-center gap-2.5 px-3 py-2.5 rounded-xl border text-left transition-all duration-200 cursor-pointer ${
+                staffType === st.value
+                  ? "border-indigo-300 bg-indigo-50/50 ring-1 ring-indigo-200/50"
+                  : "border-slate-200 bg-slate-50/50 hover:border-slate-300"
+              }`}
+            >
+              <span className={`${staffType === st.value ? "text-indigo-900" : "text-slate-400"} transition-colors`}>
+                {st.icon}
+              </span>
+              <div>
+                <span className={`text-xs font-semibold ${staffType === st.value ? "text-indigo-900" : "text-slate-700"}`}>
+                  {st.label}
+                </span>
+                <span className="text-[10px] text-slate-500 ml-2">{st.desc}</span>
+              </div>
+            </button>
+          ))}
+        </div>
+      </div>
+
       <SliderField
-        label="Base Staff Cost (per 4-week period)" value={staffCost}
+        label="Staff Cost (per 4-week period)" value={staffCost}
         min={0} max={15000} step={500} unit="$"
         onChange={onStaffCostChange}
         sublabel="Per period (salary + car + taxes + benefits)"
       />
 
-      <SliderField
-        label="Commission Rate" value={commissionPct}
-        min={0} max={25} step={1} unit="%"
-        onChange={onCommissionPctChange}
-        sublabel="% of annualized sales volume paid as commission"
-      />
+      {staffType === "sales" && (
+        <SliderField
+          label="Commission Rate" value={commissionPct}
+          min={0} max={25} step={1} unit="%"
+          onChange={onCommissionPctChange}
+          sublabel="% of annualized sales volume paid as commission"
+        />
+      )}
 
       <SliderField
         label="Staff Start Period" value={staffStart}
@@ -107,55 +150,70 @@ export function WhatIfSliders(props: WhatIfSlidersProps) {
         onChange={handleStaffStartChange}
       />
 
-      <div className="flex items-center gap-3">
-        <input
-          type="checkbox" checked={useSameRamp} id="sameRamp"
-          onChange={e => {
-            onUseSameRampChange(e.target.checked);
-            if (e.target.checked) handleSameRamp(sameRampValue);
-          }}
-          className="rounded border-gray-300 bg-white text-indigo-900 focus:ring-indigo-900 cursor-pointer
-            w-4 h-4 transition-colors duration-150"
-        />
-        <label htmlFor="sameRamp" className="text-xs text-slate-400 cursor-pointer select-none">
-          Same weekly average for all active periods
-        </label>
-      </div>
-
-      {useSameRamp ? (
+      {/* Operations Manager: Efficiency slider */}
+      {staffType === "operations" && (
         <SliderField
-          label="Weekly Sales Avg" value={sameRampValue}
-          min={0} max={1000} step={25} unit="$"
-          onChange={handleSameRamp}
-          sublabel="New sales $/wk for all periods from start"
+          label="Operating Expense Reduction" value={Math.round(operationsEfficiency * 100)}
+          min={0} max={20} step={1} unit="%"
+          onChange={v => onOperationsEfficiencyChange(v / 100)}
+          sublabel="% reduction in base operating expenses when active"
         />
-      ) : (
-        <div className="space-y-3">
-          <span className="text-[10px] font-semibold text-slate-500 uppercase tracking-[0.12em]">
-            Per-Period Weekly Sales Forecast ($/wk)
-          </span>
-          <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-2">
-            {weeklyRamp.map((val, i) => (
-              <div key={i} className="flex items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 px-2.5 py-2">
-                <span className="text-[10px] font-semibold text-slate-400 shrink-0">P{i + 1}</span>
-                <span className="text-slate-300">$</span>
-                <input
-                  type="text"
-                  inputMode="numeric"
-                  value={val}
-                  onChange={e => {
-                    const newRamp = [...weeklyRamp];
-                    newRamp[i] = Number(e.target.value.replace(/[^0-9]/g, "")) || 0;
-                    onWeeklyRampChange(newRamp);
-                  }}
-                  className="w-full text-right text-xs font-semibold text-slate-900 bg-transparent
-                             focus:outline-none tabular-nums"
-                />
-              </div>
-            ))}
+      )}
+
+      {/* Sales-specific controls: revenue ramp */}
+      {staffType === "sales" && (
+        <>
+          <div className="flex items-center gap-3">
+            <input
+              type="checkbox" checked={useSameRamp} id="sameRamp"
+              onChange={e => {
+                onUseSameRampChange(e.target.checked);
+                if (e.target.checked) handleSameRamp(sameRampValue);
+              }}
+              className="rounded border-gray-300 bg-white text-indigo-900 focus:ring-indigo-900 cursor-pointer
+                w-4 h-4 transition-colors duration-150"
+            />
+            <label htmlFor="sameRamp" className="text-xs text-slate-400 cursor-pointer select-none">
+              Same weekly average for all active periods
+            </label>
           </div>
-          <p className="text-[10px] text-slate-400">Enter the average new sales $/week for each period. Set to 0 for periods before hire.</p>
-        </div>
+
+          {useSameRamp ? (
+            <SliderField
+              label="Weekly Sales Avg" value={sameRampValue}
+              min={0} max={1000} step={25} unit="$"
+              onChange={handleSameRamp}
+              sublabel="New sales $/wk for all periods from start"
+            />
+          ) : (
+            <div className="space-y-3">
+              <span className="text-[10px] font-semibold text-slate-500 uppercase tracking-[0.12em]">
+                Per-Period Weekly Sales Forecast ($/wk)
+              </span>
+              <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-2">
+                {weeklyRamp.map((val, i) => (
+                  <div key={i} className="flex items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 px-2.5 py-2">
+                    <span className="text-[10px] font-semibold text-slate-400 shrink-0">P{i + 1}</span>
+                    <span className="text-slate-300">$</span>
+                    <input
+                      type="text"
+                      inputMode="numeric"
+                      value={val}
+                      onChange={e => {
+                        const newRamp = [...weeklyRamp];
+                        newRamp[i] = Number(e.target.value.replace(/[^0-9]/g, "")) || 0;
+                        onWeeklyRampChange(newRamp);
+                      }}
+                      className="w-full text-right text-xs font-semibold text-slate-900 bg-transparent
+                                 focus:outline-none tabular-nums"
+                    />
+                  </div>
+                ))}
+              </div>
+              <p className="text-[10px] text-slate-400">Enter the average new sales $/week for each period. Set to 0 for periods before hire.</p>
+            </div>
+          )}
+        </>
       )}
 
       <SliderField

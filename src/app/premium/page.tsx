@@ -1,19 +1,22 @@
-﻿"use client";
+"use client";
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Nav } from "@/components/nav";
 import { fmtCurrency, fmtPct } from "@/lib/model";
-import { SERVICES, type ServiceName } from "@/lib/services";
-import { getDemoServiceData, getRollingServiceForecast, type ServicePeriodData } from "@/lib/service-demo-data";
+import { SERVICES, type ServiceName, type ServicePeriodData } from "@/lib/services";
+import {
+  getClientServiceData, getClientCompanyExpenses, getRollingServiceForecast,
+  type ServiceDataResult, type CompanyExpensePeriod,
+} from "@/lib/service-data";
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
   PieChart, Pie, Cell,
 } from "recharts";
 import { supabase } from "@/lib/supabase/client";
 import type { ClientRow } from "@/lib/supabase/types";
-import { Crown, ArrowRight, Loader2 } from "lucide-react";
+import { Crown, ArrowRight, Loader2, DatabaseZap } from "lucide-react";
 
 function getClientId(): string | null {
   if (typeof document === "undefined") return null;
@@ -26,7 +29,9 @@ export default function PremiumPage() {
   const [loading, setLoading] = useState(true);
   const [clientName, setClientName] = useState("");
   const [periodsCompleted, setPc] = useState(5);
-  const [serviceData, setServiceData] = useState<ReturnType<typeof getDemoServiceData> | null>(null);
+  const [serviceData, setServiceData] = useState<ServiceDataResult | null>(null);
+  const [companyExpenses, setCompanyExpenses] = useState<{ budget: CompanyExpensePeriod[]; actuals: CompanyExpensePeriod[] } | null>(null);
+  const [noData, setNoData] = useState(false);
 
   useEffect(() => {
     async function load() {
@@ -49,16 +54,43 @@ export default function PremiumPage() {
         }
       } catch {}
 
-      setServiceData(getDemoServiceData(pc));
+      const [svcData, expData] = await Promise.all([
+        getClientServiceData(clientId),
+        getClientCompanyExpenses(clientId),
+      ]);
+
+      if (!svcData) {
+        setNoData(true);
+      } else {
+        setServiceData(svcData);
+        setCompanyExpenses(expData);
+      }
       setLoading(false);
     }
     load();
   }, []);
 
-  if (loading || !serviceData) {
+  if (loading) {
     return (
       <div className="page-ambient min-h-screen text-slate-900 flex items-center justify-center">
         <Loader2 className="w-6 h-6 animate-spin text-indigo-900" />
+      </div>
+    );
+  }
+
+  if (noData || !serviceData) {
+    return (
+      <div className="page-ambient min-h-screen text-slate-900">
+        <Nav />
+        <div className="max-w-2xl mx-auto px-4 pt-24 text-center">
+          <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-slate-100 mx-auto mb-5">
+            <DatabaseZap className="h-7 w-7 text-slate-400" />
+          </div>
+          <h2 className="text-xl font-semibold text-slate-900 mb-2">Service Data Not Yet Loaded</h2>
+          <p className="text-sm text-slate-500 max-w-md mx-auto">
+            Premium Analytics requires per-service financial data. Your administrator will load this data during onboarding.
+          </p>
+        </div>
       </div>
     );
   }
@@ -85,16 +117,16 @@ export default function PremiumPage() {
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 py-5 space-y-6">
         {/* Service Overview KPIs */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
           {SERVICES.map(svc => {
             const data = serviceData[svc.key];
             const rolling = getRollingServiceForecast(data.actuals, data.forecast, periodsCompleted);
             const ytdRev = rolling.slice(0, periodsCompleted).reduce((s, p) => s + p.revenue, 0);
             const ytdBudgetRev = data.budget.slice(0, periodsCompleted).reduce((s, p) => s + p.revenue, 0);
             const variance = ytdRev - ytdBudgetRev;
-            const ytdAGP = rolling.slice(0, periodsCompleted).reduce((s, p) => s + p.agp, 0);
-            const agpPct = ytdRev > 0 ? ytdAGP / ytdRev : 0;
             const ytdNI = rolling.slice(0, periodsCompleted).reduce((s, p) => s + p.netIncome, 0);
+            const ytdBudgetNI = data.budget.slice(0, periodsCompleted).reduce((s, p) => s + p.netIncome, 0);
+            const niVar = ytdNI - ytdBudgetNI;
             const netMargin = ytdRev > 0 ? ytdNI / ytdRev : 0;
 
             return (
@@ -128,8 +160,10 @@ export default function PremiumPage() {
                       </p>
                     </div>
                     <div>
-                      <p className="text-[10px] text-slate-500 uppercase tracking-[0.1em]">AGP %</p>
-                      <p className="text-xs font-bold text-slate-900 tabular-nums">{fmtPct(agpPct)}</p>
+                      <p className="text-[10px] text-slate-500 uppercase tracking-[0.1em]">Net Income</p>
+                      <p className={`text-xs font-bold tabular-nums ${ytdNI >= 0 ? "text-emerald-700" : "text-red-600"}`}>
+                        {fmtCurrency(ytdNI)}
+                      </p>
                     </div>
                     <div>
                       <p className="text-[10px] text-slate-500 uppercase tracking-[0.1em]">Net Margin</p>
@@ -153,7 +187,7 @@ export default function PremiumPage() {
           <p className="text-[11px] text-slate-500 mb-5">Actual vs Budget for first {periodsCompleted} periods</p>
 
           <div className="flex items-center gap-4 mb-2">
-            <span className="text-[10px] font-medium text-slate-400 uppercase tracking-wider w-16 shrink-0">Service</span>
+            <span className="text-[10px] font-medium text-slate-400 uppercase tracking-wider w-24 shrink-0">Service</span>
             <span className="flex-1 text-[10px] font-medium text-slate-400 uppercase tracking-wider">YTD Actual Revenue</span>
             <span className="text-[10px] font-medium text-slate-400 uppercase tracking-wider w-14 text-right">% of Budget</span>
           </div>
@@ -168,7 +202,7 @@ export default function PremiumPage() {
 
               return (
                 <div key={svc.key} className="flex items-center gap-4">
-                  <span className="text-xs font-medium text-slate-500 w-16 shrink-0">{svc.label}</span>
+                  <span className="text-xs font-medium text-slate-500 w-24 shrink-0 truncate">{svc.label}</span>
                   <div className="flex-1 relative h-8 rounded-lg bg-slate-50 border border-slate-100 overflow-hidden">
                     <div
                       className="absolute inset-y-0 left-0 rounded-lg transition-all duration-500"
@@ -192,7 +226,7 @@ export default function PremiumPage() {
         {/* Service Detail Table with full P&L */}
         <div className="spotlight-card p-5 sm:p-6 overflow-x-auto">
           <h3 className="text-sm font-semibold text-slate-800 mb-1">Service P&L Summary</h3>
-          <p className="text-[11px] text-slate-500 mb-5">YTD profitability with per-service cost allocation</p>
+          <p className="text-[11px] text-slate-500 mb-5">YTD profitability with per-service cost allocation. Net Income = Revenue minus service-level costs (see each service for details).</p>
 
           <table className="w-full text-xs">
             <thead>
@@ -204,7 +238,6 @@ export default function PremiumPage() {
                 <th className="py-2.5 px-2 text-right font-medium">Franch. Fee</th>
                 <th className="py-2.5 px-2 text-right font-medium">Route Labor</th>
                 <th className="py-2.5 px-2 text-right font-medium">Vehicle</th>
-                <th className="py-2.5 px-2 text-right font-medium">AGP</th>
                 <th className="py-2.5 px-2 text-right font-medium">Net Income</th>
                 <th className="py-2.5 px-2 text-right font-medium">Net Margin</th>
               </tr>
@@ -220,7 +253,6 @@ export default function PremiumPage() {
                 const ff = slice.reduce((s, p) => s + p.franchiseFee, 0);
                 const rl = slice.reduce((s, p) => s + p.routeLabor, 0);
                 const veh = slice.reduce((s, p) => s + p.vehicleExpense, 0);
-                const agp = slice.reduce((s, p) => s + p.agp, 0);
                 const ni = slice.reduce((s, p) => s + p.netIncome, 0);
                 const margin = ytdRev > 0 ? ni / ytdRev : 0;
 
@@ -238,7 +270,6 @@ export default function PremiumPage() {
                     <td className="py-2.5 px-2 text-right text-purple-700 tabular-nums">{fmtCurrency(ff)}</td>
                     <td className="py-2.5 px-2 text-right text-red-700 tabular-nums">{fmtCurrency(rl)}</td>
                     <td className="py-2.5 px-2 text-right text-orange-700 tabular-nums">{fmtCurrency(veh)}</td>
-                    <td className="py-2.5 px-2 text-right text-emerald-800 tabular-nums font-medium">{fmtCurrency(agp)}</td>
                     <td className={`py-2.5 px-2 text-right tabular-nums font-medium ${ni >= 0 ? "text-emerald-700" : "text-red-600"}`}>
                       {fmtCurrency(ni)}
                     </td>
@@ -252,7 +283,7 @@ export default function PremiumPage() {
             <tfoot>
               <tr className="border-t-2 border-slate-200 bg-slate-50/50">
                 {(() => {
-                  let tRev = 0, tCogs = 0, tGP = 0, tFF = 0, tRL = 0, tVeh = 0, tAGP = 0, tNI = 0;
+                  let tRev = 0, tCogs = 0, tGP = 0, tFF = 0, tRL = 0, tVeh = 0, tNI = 0;
                   SERVICES.forEach(svc => {
                     const data = serviceData[svc.key];
                     const rolling = getRollingServiceForecast(data.actuals, data.forecast, periodsCompleted);
@@ -263,7 +294,6 @@ export default function PremiumPage() {
                     tFF += slice.reduce((s, p) => s + p.franchiseFee, 0);
                     tRL += slice.reduce((s, p) => s + p.routeLabor, 0);
                     tVeh += slice.reduce((s, p) => s + p.vehicleExpense, 0);
-                    tAGP += slice.reduce((s, p) => s + p.agp, 0);
                     tNI += slice.reduce((s, p) => s + p.netIncome, 0);
                   });
                   const margin = tRev > 0 ? tNI / tRev : 0;
@@ -276,7 +306,6 @@ export default function PremiumPage() {
                       <td className="py-2.5 px-2 text-right font-bold text-purple-700 tabular-nums">{fmtCurrency(tFF)}</td>
                       <td className="py-2.5 px-2 text-right font-bold text-red-700 tabular-nums">{fmtCurrency(tRL)}</td>
                       <td className="py-2.5 px-2 text-right font-bold text-orange-700 tabular-nums">{fmtCurrency(tVeh)}</td>
-                      <td className="py-2.5 px-2 text-right font-bold text-emerald-800 tabular-nums">{fmtCurrency(tAGP)}</td>
                       <td className={`py-2.5 px-2 text-right font-bold tabular-nums ${tNI >= 0 ? "text-emerald-700" : "text-red-600"}`}>{fmtCurrency(tNI)}</td>
                       <td className={`py-2.5 px-2 text-right font-bold tabular-nums ${margin >= 0 ? "text-emerald-700" : "text-red-600"}`}>{fmtPct(margin)}</td>
                     </>
@@ -288,12 +317,12 @@ export default function PremiumPage() {
         </div>
 
         {/* Overall Expenses */}
-        <OverallExpenses periodsCompleted={periodsCompleted} serviceData={serviceData} />
+        {companyExpenses && <OverallExpenses periodsCompleted={periodsCompleted} expenses={companyExpenses} />}
 
         {/* Link to individual services */}
         <div className="spotlight-card p-5 sm:p-6">
           <h3 className="text-sm font-semibold text-slate-800 mb-4">Service Deep Dives</h3>
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
             {SERVICES.map(svc => (
               <Link
                 key={svc.key}
@@ -318,20 +347,17 @@ export default function PremiumPage() {
   );
 }
 
-function ProfitabilityComparison({ periodsCompleted, serviceData }: { periodsCompleted: number; serviceData: ReturnType<typeof getDemoServiceData> }) {
+function ProfitabilityComparison({ periodsCompleted, serviceData }: { periodsCompleted: number; serviceData: ServiceDataResult }) {
   const profitData = SERVICES.map(svc => {
     const data = serviceData[svc.key];
     const rolling = getRollingServiceForecast(data.actuals, data.forecast, periodsCompleted);
     const slice = rolling.slice(0, periodsCompleted);
     const ytdRev = slice.reduce((s, p) => s + p.revenue, 0);
     const ni = slice.reduce((s, p) => s + p.netIncome, 0);
-    const agp = slice.reduce((s, p) => s + p.agp, 0);
     return {
       name: svc.label,
       revenue: ytdRev,
-      agp,
       netIncome: ni,
-      agpMargin: ytdRev > 0 ? (agp / ytdRev) * 100 : 0,
       netMargin: ytdRev > 0 ? (ni / ytdRev) * 100 : 0,
       color: svc.color,
     };
@@ -374,15 +400,14 @@ function ProfitabilityComparison({ periodsCompleted, serviceData }: { periodsCom
               <YAxis tick={{ fill: "#64748B", fontSize: 11 }} tickFormatter={(v: number) => fmtCurrency(v, true)} axisLine={{ stroke: "#E2E8F0" }} />
               <Tooltip {...tooltipStyle} formatter={(v) => fmtCurrency(Number(v))} />
               <Legend wrapperStyle={{ fontSize: 11, color: "#64748B", paddingTop: 10 }} />
-              <Bar dataKey="agp" fill="#065F46" name="AGP" radius={[4, 4, 0, 0]} />
               <Bar dataKey="netIncome" fill="#1E3A8A" name="Net Income" radius={[4, 4, 0, 0]} />
             </BarChart>
           </ResponsiveContainer>
         </div>
 
         <div className="spotlight-card p-5 sm:p-6">
-          <h3 className="text-sm font-semibold text-slate-800 mb-1">Margin Comparison</h3>
-          <p className="text-[11px] text-slate-500 mb-5">AGP margin vs net margin by service</p>
+          <h3 className="text-sm font-semibold text-slate-800 mb-1">Net Margin by Service</h3>
+          <p className="text-[11px] text-slate-500 mb-5">Net income as % of revenue, YTD</p>
           <ResponsiveContainer width="100%" height={240}>
             <BarChart data={profitData}>
               <CartesianGrid strokeDasharray="3 3" stroke="#F1F5F9" />
@@ -390,7 +415,6 @@ function ProfitabilityComparison({ periodsCompleted, serviceData }: { periodsCom
               <YAxis tick={{ fill: "#64748B", fontSize: 11 }} tickFormatter={(v: number) => `${v.toFixed(0)}%`} axisLine={{ stroke: "#E2E8F0" }} />
               <Tooltip {...tooltipStyle} formatter={(v) => `${Number(v).toFixed(1)}%`} />
               <Legend wrapperStyle={{ fontSize: 11, color: "#64748B", paddingTop: 10 }} />
-              <Bar dataKey="agpMargin" fill="#065F46" name="AGP Margin %" radius={[4, 4, 0, 0]} />
               <Bar dataKey="netMargin" fill="#4338CA" name="Net Margin %" radius={[4, 4, 0, 0]} />
             </BarChart>
           </ResponsiveContainer>
@@ -421,31 +445,16 @@ function ProfitabilityComparison({ periodsCompleted, serviceData }: { periodsCom
   );
 }
 
-function OverallExpenses({ periodsCompleted, serviceData }: { periodsCompleted: number; serviceData: ReturnType<typeof getDemoServiceData> }) {
-  const chartData = Array.from({ length: 13 }, (_, i) => {
-    let sales = 0, opex = 0, overhead = 0;
-    let budgetSales = 0, budgetOpex = 0, budgetOverhead = 0;
-
-    for (const svc of SERVICES) {
-      const data = serviceData[svc.key];
-      const rolling = getRollingServiceForecast(data.actuals, data.forecast, periodsCompleted);
-      sales += rolling[i]?.salesCost ?? 0;
-      opex += rolling[i]?.operatingCost ?? 0;
-      overhead += rolling[i]?.overheadCost ?? 0;
-      budgetSales += data.budget[i]?.salesCost ?? 0;
-      budgetOpex += data.budget[i]?.operatingCost ?? 0;
-      budgetOverhead += data.budget[i]?.overheadCost ?? 0;
-    }
-    return {
-      period: `P${i + 1}`,
-      sales: i < periodsCompleted ? sales : null,
-      budgetSales,
-      opex: i < periodsCompleted ? opex : null,
-      budgetOpex,
-      overhead: i < periodsCompleted ? overhead : null,
-      budgetOverhead,
-    };
-  });
+function OverallExpenses({ periodsCompleted, expenses }: { periodsCompleted: number; expenses: { budget: CompanyExpensePeriod[]; actuals: CompanyExpensePeriod[] } }) {
+  const chartData = Array.from({ length: 13 }, (_, i) => ({
+    period: `P${i + 1}`,
+    sales: i < periodsCompleted ? (expenses.actuals[i]?.sales ?? null) : null,
+    budgetSales: expenses.budget[i]?.sales ?? 0,
+    opex: i < periodsCompleted ? (expenses.actuals[i]?.operating ?? null) : null,
+    budgetOpex: expenses.budget[i]?.operating ?? 0,
+    overhead: i < periodsCompleted ? (expenses.actuals[i]?.overhead ?? null) : null,
+    budgetOverhead: expenses.budget[i]?.overhead ?? 0,
+  }));
 
   const tooltipStyle = {
     contentStyle: { background: "#fff", border: "1px solid #E2E8F0", borderRadius: "10px", fontSize: 12, boxShadow: "0 4px 16px rgba(15,23,42,0.08)" },

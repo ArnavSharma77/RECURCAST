@@ -48,3 +48,51 @@ export interface ModelParamsRow {
   notes: string | null;
   created_at: string;
 }
+
+export type ServiceName =
+  | "sani"
+  | "scrub"
+  | "windows"
+  | "refresh"
+  | "nonrestroom"
+  | "oneoffs";
+
+export type DataType = "budget" | "actual";
+
+export interface ServicePeriodDataRow {
+  id: string;
+  client_id: string;
+  service_name: ServiceName;
+  period_num: number;
+  data_type: DataType;
+  revenue: number;
+  cogs: number;
+  franchise_fee: number;
+  route_labor: number;
+  vehicle_expense: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface CompanyExpensesRow {
+  id: string;
+  client_id: string;
+  period_num: number;
+  data_type: DataType;
+  sales_expense: number;
+  operating_expense: number;
+  overhead_expense: number;
+  created_at: string;
+}
+
+export interface SavedScenarioRow {
+  id: string;
+  client_id: string;
+  name: string;
+  description: string | null;
+  scope: "company" | "service";
+  service_name: ServiceName | null;
+  inputs: Record<string, unknown>;
+  results_summary: Record<string, unknown>;
+  created_at: string;
+}
