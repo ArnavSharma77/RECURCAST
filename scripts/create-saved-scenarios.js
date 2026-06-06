@@ -1,10 +1,14 @@
 const { createClient } = require("@supabase/supabase-js");
 
-const SUPABASE_URL = "https://sphewklcsrgpwwdjeorv.supabase.co";
-const SERVICE_KEY = "sb_secret_7KBN9YfJM413d5xzDoGqKQ_4m76uAcj";
+const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL;
+const SERVICE_KEY = process.env.SUPABASE_SERVICE_KEY;
+
+if (!SUPABASE_URL || !SERVICE_KEY) {
+  console.error("Missing env vars. Set NEXT_PUBLIC_SUPABASE_URL and SUPABASE_SERVICE_KEY in .env.local");
+  process.exit(1);
+}
 
 async function run() {
-  // Use the Supabase SQL endpoint (available to service role)
   const sql = `
 CREATE TABLE IF NOT EXISTS saved_scenarios (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -35,45 +39,18 @@ DO $$ BEGIN
 END $$;
   `;
 
-  const resp = await fetch(`${SUPABASE_URL}/rest/v1/rpc/`, {
-    method: "POST",
-    headers: {
-      "apikey": SERVICE_KEY,
-      "Authorization": `Bearer ${SERVICE_KEY}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({ name: "exec_sql", params: { sql } }),
-  });
-
-  // Alternative: use the pg_net or direct SQL approach via supabase-js
-  // Since PostgREST doesn't support DDL, let's use the Supabase Management API
-  const mgmtResp = await fetch(`https://api.supabase.com/v1/projects/sphewklcsrgpwwdjeorv/database/query`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "Authorization": `Bearer ${SERVICE_KEY}`,
-    },
-    body: JSON.stringify({ query: sql }),
-  });
-
-  if (mgmtResp.ok) {
-    const result = await mgmtResp.json();
-    console.log("Migration applied successfully:", result);
-  } else {
-    const text = await mgmtResp.text();
-    console.log("Management API status:", mgmtResp.status, text.substring(0, 300));
-    
-    // Fallback: try via supabase-js rpc
-    const sb = createClient(SUPABASE_URL, SERVICE_KEY);
-    const { error } = await sb.rpc("exec_sql", { query: sql });
-    if (error) {
-      console.log("RPC also failed:", error.message);
-      console.log("\n=== MANUAL SQL (run in Supabase Dashboard > SQL Editor) ===\n");
-      console.log(sql);
-    } else {
-      console.log("Applied via RPC successfully");
-    }
+  const sb = createClient(SUPABASE_URL, SERVICE_KEY);
+  const { error } = await sb.rpc("exec_sql", { query: sql });
+  if (error) {
+    console.log("RPC failed:", error.message);
+    console.log("\n=== MANUAL SQL (run in Supabase Dashboard > SQL Editor) ===\n");
+    console.log(sql);
+    process.exit(1);
   }
+  console.log("Migration applied successfully");
 }
 
-run().catch(e => console.error("Error:", e.message));
+run().catch((e) => {
+  console.error("Error:", e.message);
+  process.exit(1);
+});
