@@ -63,7 +63,7 @@ function SliderField({
 const STAFF_TYPES: { value: StaffType; label: string; desc: string; icon: React.ReactNode }[] = [
   { value: "sales", label: "Salesperson", desc: "Generates revenue via new sales", icon: <UserPlus className="w-3.5 h-3.5" /> },
   { value: "office", label: "Office / Admin", desc: "Fixed cost, no direct revenue", icon: <Briefcase className="w-3.5 h-3.5" /> },
-  { value: "operations", label: "Operations Mgr", desc: "Reduces operating expenses", icon: <Settings2 className="w-3.5 h-3.5" /> },
+  { value: "operations", label: "Operations Overhead", desc: "Fixed cost, operations support", icon: <Settings2 className="w-3.5 h-3.5" /> },
 ];
 
 export function WhatIfSliders(props: WhatIfSlidersProps) {
@@ -149,16 +149,6 @@ export function WhatIfSliders(props: WhatIfSlidersProps) {
         min={1} max={13} step={1} unit="P"
         onChange={handleStaffStartChange}
       />
-
-      {/* Operations Manager: Efficiency slider */}
-      {staffType === "operations" && (
-        <SliderField
-          label="Operating Expense Reduction" value={Math.round(operationsEfficiency * 100)}
-          min={0} max={20} step={1} unit="%"
-          onChange={v => onOperationsEfficiencyChange(v / 100)}
-          sublabel="% reduction in base operating expenses when active"
-        />
-      )}
 
       {/* Sales-specific controls: revenue ramp */}
       {staffType === "sales" && (

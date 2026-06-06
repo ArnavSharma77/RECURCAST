@@ -47,7 +47,7 @@ function getPresets(weeklySales: number): Preset[] {
   return [
     { label: "Add Salesperson", desc: `$3.5K base/mo, starts P4, $${weeklySales}/wk`, icon: <UserPlus className="w-3 h-3" />, staffCost: 3500, staffStart: 4, weeklyAvg: weeklySales, staffType: "sales", cxOverride: null },
     { label: "Add Office Staff", desc: "$2.5K/period, admin support", icon: <Briefcase className="w-3 h-3" />, staffCost: 2500, staffStart: 1, weeklyAvg: 0, staffType: "office", cxOverride: null },
-    { label: "Add Ops Manager", desc: "$5K/period, reduces expenses 10%", icon: <Settings2 className="w-3 h-3" />, staffCost: 5000, staffStart: 1, weeklyAvg: 0, staffType: "operations", operationsEfficiency: 0.10, cxOverride: null },
+    { label: "Add Ops Overhead", desc: "$5K/period, operations support", icon: <Settings2 className="w-3 h-3" />, staffCost: 5000, staffStart: 1, weeklyAvg: 0, staffType: "operations", cxOverride: null },
     { label: "Boost $50/wk", desc: "No new staff, +$50/wk sales", icon: <TrendingUp className="w-3 h-3" />, staffCost: 0, staffStart: 1, weeklyAvg: 50, staffType: "sales", cxOverride: null },
     { label: "Price Increase 5%", desc: "5% service price bump at P6", icon: <DollarSign className="w-3 h-3" />, staffCost: 0, staffStart: 1, weeklyAvg: 0, cxOverride: null, servicePricePct: 5, servicePriceStart: 6, productPricePct: 0, productPriceStart: 6 },
     { label: "Lower Churn (7%)", desc: "What if CX drops from 10% to 7%?", icon: <ShieldCheck className="w-3 h-3" />, staffCost: 0, staffStart: 1, weeklyAvg: 0, cxOverride: 0.07 },
@@ -428,9 +428,6 @@ export default function WhatIfPage() {
               <span className="text-slate-700">Route/Tech <strong className={`tabular-nums ${varExpenseOnly >= 0 ? "text-red-500" : "text-emerald-600"}`}>{fmtCurrency(varExpenseOnly)}</strong></span>
               {baseSalaryTotal > 0 && <span className="text-slate-700">Base Salary <strong className="text-red-500 tabular-nums">{fmtCurrency(baseSalaryTotal)}</strong></span>}
               {commissionTotal > 0 && <span className="text-slate-700">Commission ({commissionPct}%) <strong className="text-red-500 tabular-nums">{fmtCurrency(commissionTotal)}</strong></span>}
-              {staffType === "operations" && operationsEfficiency > 0 && (
-                <span className="text-slate-700">Ops Savings <strong className="text-emerald-600 tabular-nums">{fmtCurrency(result.baseExpense.slice(params.periodsCompleted).reduce((s, v) => s + v * operationsEfficiency, 0))}</strong></span>
-              )}
               <span className="text-slate-900/10">|</span>
               <span className="text-slate-700">Total <strong className={`tabular-nums ${totalCostImpact >= 0 ? "text-red-500" : "text-emerald-600"}`}>{fmtCurrency(totalCostImpact)}</strong></span>
             </div>
@@ -490,12 +487,11 @@ export default function WhatIfPage() {
               ) : staffCost > 0 && staffType === "operations" ? (
                 <div className="text-xs text-slate-700 leading-relaxed space-y-1.5">
                   <p>
-                    An operations manager at <strong>{fmtCurrency(staffCost)}/period</strong> starting
-                    <strong> Period {staffStart}</strong> reduces operating expenses by
-                    <strong className="text-emerald-600"> {Math.round(operationsEfficiency * 100)}%</strong>.
+                    Adding operations overhead at <strong>{fmtCurrency(staffCost)}/period</strong> starting
+                    <strong> Period {staffStart}</strong>. Increases company expenses — no direct revenue generation.
                   </p>
                   <p className="text-slate-500">
-                    Net P&L impact: <strong className={totalNetImpact >= 0 ? "text-emerald-600" : "text-red-500"}>{fmtCurrency(totalNetImpact)}</strong>
+                    Net P&L impact: <strong className="text-red-500">{fmtCurrency(totalNetImpact)}</strong>
                   </p>
                 </div>
               ) : sameRampValue > 0 ? (
@@ -524,7 +520,7 @@ export default function WhatIfPage() {
                 </p>
               ) : (
                 <p className="text-xs text-slate-500 leading-relaxed">
-                  Pick a preset or adjust the sliders. Try &quot;Add Salesperson&quot; for breakeven analysis, &quot;Add Ops Manager&quot; to reduce expenses, or &quot;Price Increase&quot; for margin improvement.
+                  Pick a preset or adjust the sliders. Try &quot;Add Salesperson&quot; for breakeven analysis, &quot;Add Ops Overhead&quot; to model overhead costs, or &quot;Price Increase&quot; for margin improvement.
                 </p>
               )}
             </div>

@@ -49,7 +49,7 @@ export interface WhatIfInputs {
   staffCost: number;        // monthly loaded cost
   staffStart: number;       // period hire begins (1-indexed)
   staffType: StaffType;     // type of staff being added
-  operationsEfficiency: number; // for "operations" type: % of expense reduction (0-0.20)
+  operationsEfficiency: number; // reserved for future use (currently unused)
   cxOverride: number | null; // null = use base rate
   priceIncrease?: PriceIncreaseInput; // optional price increase scenario
 }
@@ -197,15 +197,10 @@ export function runWhatIf(
     const extraCOGS = totalExtraRev * cogsRatio;
     const extraVarExpense = totalExtraRev * variableExpenseRatio;
 
-    // Operations manager reduces existing expenses by efficiency %
-    const opsExpenseReduction = (staffType === "operations" && isActive)
-      ? baseExpense[i] * (inputs.operationsEfficiency ?? 0)
-      : 0;
-
     const newIncome = baseIncome[i] + totalExtraRev;
     const newCOGS = baseCOGS[i] + extraCOGS;
-    const newExpense = baseExpense[i] + extraVarExpense + staffHit - opsExpenseReduction;
-    const newNet = baseNetIncome[i] + totalExtraRev - extraCOGS - extraVarExpense - staffHit + opsExpenseReduction;
+    const newExpense = baseExpense[i] + extraVarExpense + staffHit;
+    const newNet = baseNetIncome[i] + totalExtraRev - extraCOGS - extraVarExpense - staffHit;
 
     scenarioIncome.push(newIncome);
     scenarioCOGS.push(newCOGS);
